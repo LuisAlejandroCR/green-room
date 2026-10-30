@@ -71,3 +71,9 @@ test("missing optional fields stay explicit through adaptation", () => {
   assert.equal(adaptAudience({ status: "empty", data: null }).state, "empty");
   assert.equal(adaptAngles({ status: "ok", data: [] }).state, "empty");
 });
+
+test("ignoredSeeds pass through adaptation and default to empty", () => {
+  const base = { state: "ok", mode: "live", results: [] };
+  assert.deepEqual(adaptRun({ ...base, state: "partial", ignoredSeeds: ["Dune", 3] }).ignoredSeeds, ["Dune"]);
+  assert.deepEqual(adaptRun({ ...base, state: "partial" }).ignoredSeeds, []);
+});

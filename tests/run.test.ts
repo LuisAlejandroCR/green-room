@@ -69,3 +69,24 @@ test("a run never exceeds 8 Qloo requests even when everything fails", async () 
   await executeRun({ work: "a", seeds: ["b", "c", "d"], confirmed: {} });
   assert.ok(calls.length <= 8);
 });
+
+test("seed_not_usable from Qloo is a typed degraded run with no results", async () => {
+  stubLive(() => ({ status: 400, body: { errors: [{ message: "invalid", path: "signal.interests.entities" }] } }));
+  const r = await executeRun({ work: "Dune", seeds: [], confirmed: { Dune: "b1" } });
+  assert.equal(r.state, "degraded");
+  assert.equal(r.error, "seed_not_usable");
+  assert.equal(r.results.length, 0);
+});
+
+test("dropped seeds are named in ignoredSeeds; an ignored work gets no workId for compare", async () => {
+  const body = (bad: string) => ({ body: { results: { entities: [entity("p1", "Show 1")] }, warnings: [{ type: "not_found", "signal.interests.entities": [bad] }] } });
+  stubLive(() => body("s1"));
+  const a = await executeRun({ work: "Dune", seeds: ["Tolkien"], confirmed: { Dune: "b1", Tolkien: "s1" } });
+  assert.deepEqual(a.ignoredSeeds, ["Tolkien"]);
+  assert.equal(a.workId, "b1");
+  stubLive(() => body("b1"));
+  const b = await executeRun({ work: "Dune", seeds: ["Tolkien"], confirmed: { Dune: "b1", Tolkien: "s1" } });
+  assert.deepEqual(b.ignoredSeeds, ["Dune"]);
+  assert.equal(b.workId, null);
+  assert.equal(b.state, "ok");
+});
