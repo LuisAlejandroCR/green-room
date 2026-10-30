@@ -31,3 +31,13 @@ Done:
 - Not done yet: per-IP rate limit, Vercel deploy, JEV review (P1), Devpost text.
 - Release requirement: the repository must be public with a visible license. Visibility is unverified; check manually before submitting.
 - Podcast coverage in Qloo is unknown; fallback idea is `urn:entity:book`.
+
+## Visual direction (listening room) - 1 of max 5 iterations used
+
+Implemented: dark forest frame, ivory surfaces, serif display + sans UI, generated abstract artwork (`components/art.tsx`), cobalt route lines, desktop shell (dark nav, hero, brief card, top-3 rows, "Proof, not promise." evidence panel, pitch sheet) and the three mobile screens (Discover, Receipt, Pitch) with icon-first bottom nav. Shortlists and Receipts views list the current run only; saving shortlists is not implemented.
+
+Validation (actual runs):
+- `npx tsc --noEmit`: pass. `npm test`: 41 tests, 41 pass. `npx next build`: compiled successfully.
+- Browser check with Playwright/Chromium against a local mock Qloo server (live mode) and sample mode, desktop 1440x900 and mobile 390x844: loading, results, evidence available, evidence unavailable (compare 500), unresolved, degraded, confirmation, empty and SAMPLE states rendered; mobile receipt shows 3 chips; no send/email control; no horizontal overflow; no JS errors; no mobile control under 44px. That run was made before a last cosmetic change (smaller ring digits at 44px); the full state run was not repeated after it.
+- Screenshots are local only (not committed): scratchpad `shots/` (desktop and mobile, 12 states each).
+- Not done: keyboard-only and screen-reader pass, dark-mode, real Qloo data (descriptions and themes come from unverified response shapes), image assets from the approved mockup (artwork is generated, not copied).

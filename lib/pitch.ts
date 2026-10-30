@@ -1,18 +1,13 @@
-// pitch.ts: deterministic pitch draft. It only uses the guest's work, the show name and tags Qloo returned.
+// pitch.ts: deterministic short pitch draft. It only uses the guest's work, the show name and tags Qloo returned.
 // No model call: nothing here can invent a show, a number or a tag.
-export function draftPitch(work: string, show: string, angles: string[]): string {
-  const hook = angles.length
-    ? `Your listeners and ${work}'s audience share an interest in ${angles.slice(0, 3).join(", ")}.`
-    : `Qloo's audience data suggests overlap between your listeners and ${work}'s audience.`;
+export function draftPitch(work: string, show: string, themes: string[]): string {
+  const shared = themes.slice(0, 3);
   return [
-    `Subject: ${work} for ${show}`,
-    "",
-    `Hi,`,
-    "",
-    hook,
-    `I'd love to talk about ${work} on ${show}. Happy to send a short brief and suggested questions.`,
-    "",
-    "Thanks,",
+    `Hi there, I'd love to share ${work} with ${show}'s listeners.`,
+    shared.length
+      ? `Qloo's audience data points to shared themes: ${shared.join(", ")}.`
+      : "Qloo's audience data suggests a thematic fit.",
+    "Happy to send a short brief and suggested questions.",
     "[Your name]",
-  ].join("\n");
+  ].join("\n\n");
 }

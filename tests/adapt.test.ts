@@ -48,3 +48,9 @@ test("enrichment failure is typed unavailable, never throws", () => {
   assert.deepEqual(adaptAngles(undefined), { state: "unavailable", reason: "malformed" });
   assert.equal(adaptAudience({ status: "ok", data: { age: {}, gender: {} } }).state, "empty");
 });
+
+test("description and missing values: present passes through, absent stays absent", () => {
+  const r = adaptRun({ state: "ok", mode: "live", results: [{ ...result(), description: "From Qloo" }, result()] });
+  assert.equal(r.shows[0].description, "From Qloo");
+  assert.equal(r.shows[1].description, undefined);
+});

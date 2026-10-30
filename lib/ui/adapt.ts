@@ -42,7 +42,8 @@ function adaptShow(r: unknown): UiShow | null {
   const mode = MODES.find((m) => m === r.mode);
   const provenance = adaptProvenance(r.provenance);
   if (!id || !name || !mode || !provenance) return null; // a result without provenance is never displayed
-  return { id, name, mode, overlap: provenance.affinity, popularity: provenance.popularity, provenance };
+  const description = str(r.description);
+  return { id, name, ...(description !== undefined && { description }), mode, overlap: provenance.affinity, popularity: provenance.popularity, provenance };
 }
 
 export function adaptRun(raw: unknown): UiRun {

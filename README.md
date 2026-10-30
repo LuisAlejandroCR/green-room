@@ -11,6 +11,16 @@ Green Room only drafts. It never sends email.
 3. **Recommend** podcasts with `/v2/insights` using only resolved or confirmed entity IDs.
 4. **Inspect** a show: receipt, plus optional audience (`/v2/insights`, demographics) and shared angles (`/v2/analysis/compare`). If an enrichment fails, the shortlist and pitch draft still work.
 
+## Visual direction
+
+A dark forest-green "listening room" frame around warm ivory product surfaces, editorial serif display type (system serif stack, no web fonts) with clean sans UI, subtle cobalt route lines and one restrained amber accent. Artwork is abstract botanical/landscape SVG generated from the result id (`components/art.tsx`); there are no stock photos and no people.
+
+- **Desktop (1024px+):** dark nav (Discover, Shortlists, Receipts), ivory workspace (hero, campaign brief, top 3 matches sorted by affinity) and a dark "Proof, not promise." evidence panel for the selected match. The pitch opens in a side sheet.
+- **Mobile:** one decision per screen: Discover ("Your 3 matches": art, title, score), Receipt ("Why this match": score, up to 3 theme chips, source, retrieved, data mode, JEV state) and Pitch ("Pitch notes": short editable draft with a "Review before using" notice). Icon-first bottom navigation, 44px minimum targets.
+- Affinity is shown on Qloo's own 0-1 scale (never as a percentage) and always described as thematic alignment, not audience size, access, or booking likelihood.
+- Descriptions come from Qloo only (`properties.description`, unverified shape). When absent the row says "Description unavailable from Qloo". Theme chips show at most 3 and fewer when Qloo returns fewer.
+- JEV is not connected: the UI says so and never claims a review happened. There is no send or email action anywhere.
+
 ## Guarantees
 
 - **Request budget.** One run (one `/api/run` or `/api/show` request) makes at most 8 Qloo requests, retries included. If the budget runs out the response is `partial` and lists exactly what was not fetched.

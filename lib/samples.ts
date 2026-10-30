@@ -5,11 +5,12 @@ export interface SampleEntity {
   name: string;
   affinity: number;
   popularity?: number;
+  description?: string;
 }
 
 export const SAMPLE_PODCASTS: SampleEntity[] = [
-  { id: "sample-1", name: "Sample Show A", affinity: 0.82, popularity: 0.31 },
-  { id: "sample-2", name: "Sample Show B", affinity: 0.77, popularity: 0.18 },
+  { id: "sample-1", name: "Sample Show A", affinity: 0.82, popularity: 0.31, description: "Synthetic description: long conversations about making things." },
+  { id: "sample-2", name: "Sample Show B", affinity: 0.77, popularity: 0.18, description: "Synthetic description: people and ideas shaping what comes next." },
   { id: "sample-3", name: "Sample Show C", affinity: 0.71 },
 ];
 
@@ -26,4 +27,8 @@ export function sampleSearch(name: string): { id: string; name: string }[] {
 }
 
 export const SAMPLE_DEMOGRAPHICS = { age: { "25_to_29": 0.4 }, gender: { female: 0.55, male: 0.45 } };
-export const SAMPLE_ANGLES = [{ tag: "sample tag", score: 0.5 }];
+export const SAMPLE_ANGLES = [
+  { tag: "Sample theme one", score: 0.5 },
+  { tag: "Sample theme two", score: 0.4 },
+  { tag: "Sample theme three", score: 0.3 },
+];

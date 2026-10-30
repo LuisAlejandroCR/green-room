@@ -14,6 +14,7 @@ export interface UiProvenance {
 export interface UiShow {
   id: string;
   name: string;
+  description?: string; // from Qloo only; absent stays absent
   mode: Mode;
   overlap?: number; // Qloo affinity; absent stays absent
   popularity?: number; // Qloo popularity index; absent stays absent

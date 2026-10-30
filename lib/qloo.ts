@@ -63,6 +63,7 @@ export interface Provenance {
 export interface PodcastResult {
   id: string;
   name: string;
+  description?: string;
   mode: QlooMode;
   provenance: Provenance;
 }
@@ -214,6 +215,7 @@ interface ParsedPodcast {
   affinity?: number;
   popularity?: number;
   explanation?: string;
+  description?: string;
 }
 
 function parsePodcasts(body: unknown): ParsedPodcast[] | null {
@@ -226,7 +228,9 @@ function parsePodcasts(body: unknown): ParsedPodcast[] | null {
     if (!id || !name) return [];
     const query = isRecord(e.query) ? e.query : {};
     // The explainability payload shape is unverified; only a plain string is kept.
-    return [{ id, name, affinity: num(query.affinity), popularity: num(e.popularity), explanation: str(query.explainability) }];
+    const props = isRecord(e.properties) ? e.properties : {};
+    // `properties.description` is unverified against live data; only a plain string is kept.
+    return [{ id, name, affinity: num(query.affinity), popularity: num(e.popularity), explanation: str(query.explainability), description: str(props.description) }];
   });
   return entities.length > 0 && out.length === 0 ? null : out;
 }
@@ -247,6 +251,7 @@ export async function recommendPodcasts(
     ? env.data.map((p) => ({
         id: p.id,
         name: p.name,
+        ...(p.description !== undefined && { description: p.description }),
         mode: env.mode,
         provenance: {
           entityId: p.id,

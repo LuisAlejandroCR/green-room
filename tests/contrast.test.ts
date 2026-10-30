@@ -12,15 +12,22 @@ const ratio = (a: string, b: string) => {
 
 // [text, background, minimum]; keep in sync with app/globals.css.
 const pairs: [string, string, string, number][] = [
-  ["body", "#14201a", "#f6f4ee", 4.5],
-  ["muted", "#4b5a52", "#f6f4ee", 4.5],
+  ["body", "#14201a", "#f4eee0", 4.5],
+  ["muted on ivory", "#4b5a52", "#f4eee0", 4.5],
+  ["muted on card", "#4b5a52", "#fffcf5", 4.5],
+  ["on-dark on panel", "#f1ead9", "#10291f", 4.5],
+  ["on-dark muted on panel", "#b8c5bb", "#10291f", 4.5],
+  ["on-dark on nav", "#f1ead9", "#0f261e", 4.5],
+  ["on-dark muted on nav", "#b8c5bb", "#0f261e", 4.5],
+  ["on-dark on active nav", "#f1ead9", "#24463a", 4.5],
+  ["on-dark muted on active nav chip", "#b8c5bb", "#24463a", 4.5],
+  ["input edge on card", "#7c8a82", "#fffcf5", 3],
   ["primary button", "#ffffff", "#1f6b4a", 4.5],
   ["live badge", "#14663f", "#e4f3ea", 4.5],
   ["recorded badge", "#2b4fa3", "#e8eefb", 4.5],
   ["sample badge", "#7a4f00", "#fff4d6", 4.5],
   ["alert badge", "#b42318", "#ffedeb", 4.5],
-  ["input edge", "#7c8a82", "#ffffff", 3],
-];
+  ];
 
 for (const [name, fg, bg, min] of pairs) {
   test(`contrast: ${name}`, () => assert.ok(ratio(fg, bg) >= min, `${name} ${ratio(fg, bg).toFixed(2)} < ${min}`));

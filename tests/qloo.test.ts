@@ -81,3 +81,12 @@ test("audience failure is a typed envelope", async () => {
   stubLive(() => ({ status: 403 }));
   assert.equal((await audienceOf("p1", createBudget())).status, "degraded");
 });
+
+test("description is kept only when Qloo returns a plain string", async () => {
+  stubLive(() => ({
+    body: { results: { entities: [entity("p1", "S1", { properties: { description: "A real description" } }), entity("p2", "S2", { properties: { description: { nested: true } } })] } },
+  }));
+  const [a, b] = (await recommendPodcasts({ seedEntityIds: ["w"] }, createBudget())).data!;
+  assert.equal(a.description, "A real description");
+  assert.equal("description" in b, false);
+});
