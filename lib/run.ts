@@ -96,5 +96,6 @@ export async function executeRun(input: RunInput, budget: Budget = createBudget(
   if (rec.status === "degraded" || rec.status === "malformed") return finish({ state: rec.status, mode: rec.mode, error: rec.error });
   if (rec.status === "empty" || !rec.data?.length) return finish({ state: "empty", mode: rec.mode });
   const ignoredSeeds = names.filter((_, i) => rec.ignoredSeedIds.includes(ids[i]));
-  return finish({ state: "ok", mode: rec.mode, results: rec.data, ignoredSeeds });
+  // If the work itself was unusable, comparing against it returns an empty 200 that would read as "no shared angles".
+  return finish({ state: "ok", mode: rec.mode, results: rec.data, ignoredSeeds, workId: ignoredSeeds.includes(names[0]) ? null : ids[0] });
 }
