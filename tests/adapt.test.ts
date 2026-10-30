@@ -1,24 +1,50 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { adaptAudience, adaptRun, tierOf } from "../lib/ui/adapt.ts";
+import { adaptAngles, adaptAudience, adaptRun } from "../lib/ui/adapt.ts";
 
-test("tierOf maps popularity to reach tiers", () => {
-  assert.equal(tierOf(0.1), "reachable");
-  assert.equal(tierOf(0.5), "stretch");
-  assert.equal(tierOf(0.9), "dream");
+const prov = { entityId: "a", queryId: "q_1", source: "GET /v2/insights", retrievedAt: "2026-10-30T00:00:00.000Z" };
+const result = (extra = {}) => ({ id: "a", name: "A", mode: "live", provenance: { ...prov, ...extra } });
+
+test("adaptRun preserves provenance and keeps absent popularity absent", () => {
+  const r = adaptRun({ state: "ok", mode: "live", workId: "w", results: [result({ affinity: 0.8 }), result({ popularity: 0.3 })] });
+  assert.equal(r.state, "ok");
+  assert.equal(r.shows[0].provenance.queryId, "q_1");
+  assert.equal(r.shows[0].popularity, undefined);
+  assert.equal(r.shows[0].overlap, 0.8);
+  assert.equal(r.shows[1].popularity, 0.3);
+  assert.equal(r.shows[1].overlap, undefined);
 });
 
-test("adaptRun keeps unresolved names and degraded causes", () => {
-  assert.equal(adaptRun({ unresolved: ["x"], mode: "sample" }).state, "unresolved");
-  assert.equal(adaptRun({ status: "degraded", mode: "live", error: "qloo_http_500" }).state, "degraded");
-  assert.equal(adaptRun({ status: "empty", mode: "live", data: [] }).state, "empty");
+test("a result without provenance makes the response malformed and shows nothing", () => {
+  const r = adaptRun({ state: "ok", mode: "live", results: [{ id: "a", name: "A", mode: "live" }] });
+  assert.equal(r.state, "malformed");
+  assert.equal(r.shows.length, 0);
 });
 
-test("adaptRun maps shows", () => {
-  const r = adaptRun({ status: "ok", mode: "live", workId: "w", data: [{ id: "a", name: "A", affinity: 0.8, popularity: 0.2, tie: true }] });
-  assert.deepEqual(r.shows[0], { id: "a", name: "A", overlap: 0.8, tier: "reachable", tie: true });
+test("adaptRun keeps typed states explicit", () => {
+  assert.equal(adaptRun({ state: "degraded", mode: "live", error: "qloo_http_500" }).state, "degraded");
+  assert.equal(adaptRun({ state: "empty", mode: "live" }).state, "empty");
+  assert.equal(adaptRun({ state: "unresolved", mode: "live", unresolved: ["x"] }).unresolved[0], "x");
+  assert.equal(adaptRun({ error: "network" }).state, "failed");
+  assert.equal(adaptRun("garbage").state, "malformed");
+  assert.equal(adaptRun({ state: "weird" }).state, "malformed");
 });
 
-test("adaptAudience returns null when Qloo gave nothing", () => {
-  assert.equal(adaptAudience({ data: { age: {}, gender: {} } }), null);
+test("needs_confirmation carries candidates; a group with fewer than two options is malformed", () => {
+  const ok = adaptRun({ state: "needs_confirmation", mode: "sample", candidates: [{ name: "Dune", options: [{ id: "1", name: "A" }, { id: "2", name: "B" }] }] });
+  assert.equal(ok.state, "needs_confirmation");
+  assert.equal(ok.candidates[0].options.length, 2);
+  assert.equal(adaptRun({ state: "needs_confirmation", mode: "sample", candidates: [{ name: "x", options: [{ id: "1", name: "A" }] }] }).state, "malformed");
+});
+
+test("partial keeps notFetched and budget", () => {
+  const r = adaptRun({ state: "partial", mode: "live", notFetched: ["recommendations"], budget: { used: 8, max: 8 } });
+  assert.deepEqual(r.notFetched, ["recommendations"]);
+  assert.deepEqual(r.budget, { used: 8, max: 8 });
+});
+
+test("enrichment failure is typed unavailable, never throws", () => {
+  assert.deepEqual(adaptAudience({ status: "degraded", error: "qloo_http_500" }), { state: "unavailable", reason: "qloo_http_500" });
+  assert.deepEqual(adaptAngles(undefined), { state: "unavailable", reason: "malformed" });
+  assert.equal(adaptAudience({ status: "ok", data: { age: {}, gender: {} } }).state, "empty");
 });
