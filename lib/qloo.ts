@@ -121,6 +121,16 @@ function listAt(body: unknown, key: string): unknown[] | null {
   return null;
 }
 
+async function badSeedPath(res: Response): Promise<boolean> {
+  try {
+    const body: unknown = await res.json();
+    const errors = isRecord(body) && Array.isArray(body.errors) ? body.errors : [];
+    return errors.some((e) => isRecord(e) && str(e.path) === "signal.interests.entities");
+  } catch {
+    return false;
+  }
+}
+
 type Fetched =
   | { kind: "body"; body: unknown }
   | { kind: "fail"; status: QlooStatus; error: string };
@@ -140,7 +150,11 @@ async function fetchQloo(path: string, params: URLSearchParams, budget: Budget):
         lastError = `qloo_http_${res.status}`;
         continue;
       }
-      if (!res.ok) return { kind: "fail", status: "degraded", error: `qloo_http_${res.status}` };
+      if (!res.ok) {
+        // Verified live: a 400 on signal.interests.entities means none of the seeds is usable as a signal.
+        if (res.status === 400 && (await badSeedPath(res))) return { kind: "fail", status: "degraded", error: "seed_not_usable" };
+        return { kind: "fail", status: "degraded", error: `qloo_http_${res.status}` };
+      }
       try {
         return { kind: "body", body: await res.json() };
       } catch {
@@ -232,7 +246,8 @@ function parsePodcasts(body: unknown): ParsedPodcast[] | null {
   if (!entities) return null;
   const out = entities.flatMap((e): ParsedPodcast[] => {
     if (!isRecord(e)) return [];
-    const id = str(e.entity_id);
+    // Same documented id forms as /search: `entity_id`, or `id`.
+    const id = str(e.entity_id) ?? str(e.id);
     const name = str(e.name);
     if (!id || !name) return [];
     const query = isRecord(e.query) ? e.query : {};
@@ -245,15 +260,30 @@ function parsePodcasts(body: unknown): ParsedPodcast[] | null {
   return entities.length > 0 && out.length === 0 ? null : out;
 }
 
+// Verified live: with several seeds, Qloo answers 200 and lists unusable ones in `warnings[]` under the literal key "signal.interests.entities".
+// Those seeds did not shape the results, so the caller must say so.
+function ignoredSeedIds(body: unknown, sent: string[]): string[] {
+  const warnings = isRecord(body) && Array.isArray(body.warnings) ? body.warnings : [];
+  const ids = warnings.flatMap((w) => {
+    const sig = isRecord(w) ? w["signal.interests.entities"] : undefined;
+    return Array.isArray(sig) ? sig.filter((x): x is string => typeof x === "string") : [];
+  });
+  return [...new Set(ids)].filter((id) => sent.includes(id));
+}
+
 export async function recommendPodcasts(
   input: RecommendPodcastsInput,
   budget: Budget,
-): Promise<QlooEnvelope<PodcastResult[]>> {
+): Promise<QlooEnvelope<PodcastResult[]> & { ignoredSeedIds: string[] }> {
+  let ignored: string[] = [];
   const env = await call<ParsedPodcast[]>(
     "/v2/insights",
     buildPodcastQuery(input),
     budget,
-    parsePodcasts,
+    (b) => {
+      ignored = ignoredSeedIds(b, input.seedEntityIds);
+      return parsePodcasts(b);
+    },
     () => SAMPLE_PODCASTS,
   );
   const source = env.mode === "sample" ? `${env.source} (synthetic fixture, no request made)` : env.source;
@@ -274,7 +304,7 @@ export async function recommendPodcasts(
         },
       }))
     : null;
-  return { ...env, source, data };
+  return { ...env, source, data, ignoredSeedIds: ignored };
 }
 
 // ---- Optional enrichments: their failure never blocks the shortlist or the pitch draft.

@@ -74,7 +74,7 @@ export default function Home() {
   const confirm = () => run && void post({ ...Object.fromEntries(run.resolved.map((r) => [r.name, r.id])), ...choices });
   const cancel = () => {
     setChoices({});
-    setRun({ state: "cancelled", mode: null, workId: null, shows: [], resolved: [], candidates: [], unresolved: [], notFetched: [], budget: null });
+    setRun({ state: "cancelled", mode: null, workId: null, shows: [], resolved: [], candidates: [], unresolved: [], notFetched: [], ignoredSeeds: [], budget: null });
   };
   const openReceipt = (s: UiShow) => { setSelectedId(s.id); setPitch(null); setScreen("receipt"); };
   const openPitch = () => {
@@ -90,7 +90,7 @@ export default function Home() {
     <ConfirmStep groups={run.candidates} choices={choices} setChoice={(n, id) => setChoices((c) => ({ ...c, [n]: id }))} onConfirm={confirm} onCancel={cancel} />
   ) : null;
   const hasMatches = run?.state === "ok" && shows.length > 0;
-  const notice = run && !busy && run.state !== "ok" && run.state !== "needs_confirmation" ? <RunNotice run={run} /> : null;
+  const notice = run && !busy && (run.state !== "ok" || run.ignoredSeeds.length > 0) && run.state !== "needs_confirmation" ? <RunNotice run={run} /> : null;
 
   // ---------- Desktop
   if (desktop) {

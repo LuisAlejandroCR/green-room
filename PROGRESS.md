@@ -73,3 +73,23 @@ Remaining before submission (not done here):
 4. Verify the repository is public with the MIT license visible in the About panel (visibility is unverified).
 5. Keyboard-only and screen-reader pass.
 6. Devpost: description, testing instructions with the demo URL, screenshots with live data, English only; submit before the deadline (2026-10-30 23:45 EDT).
+
+## Iteration 3: first live verification (2026-10-30)
+
+Key loaded from `.env.local` by the shell; never printed. `npm run smoke:qloo` (run with `node --env-file=.env.local`): 8 pass, 0 fail, 0 skipped.
+
+Verified live:
+- `/search` accepts the four-type `types` list; `entity_id`, `name`, `popularity` and `properties.description` are present. Search is fuzzy: a nonsense name still returns 5 candidates, so the confirmation step is the guard.
+- `/v2/insights` podcast results: `results.entities[]` with `entity_id`, `name`, `popularity`, `query.affinity`, `properties.description`/`short_description`. `query.explainability` was not returned in the runs made, so explanation stays absent.
+- A seed Qloo cannot use as a signal gives HTTP 400 ("All of the provided signal.interests.entities were invalid") when it is the only seed. With several seeds Qloo answers 200 and lists the dropped ones under the literal warning key `signal.interests.entities`.
+- Adding `filter.popularity.max` to a request with only unusable seeds returns 200: the seed is ignored, so that filter must not be used as evidence of personalised results.
+- Demographics: age and gender maps returned. Compare: `results.tags` shape matches the parser; it was empty for the pair tried.
+
+Changes:
+- `lib/qloo.ts`: parser accepts `id` as well as `entity_id`; a 400 on `signal.interests.entities` is the typed `seed_not_usable`; seeds named in warnings are returned as `ignoredSeedIds`.
+- `lib/run.ts`, `lib/ui/*`, `app/page.tsx`, `components/run-states.tsx`: `ignoredSeeds` is shown as a notice next to the results; `seed_not_usable` has its own message.
+- `lib/smoke.ts`: seeds insights from the first search hit that works; the popularity and empty-search checks are informational.
+
+Validation: `npm run typecheck` pass; `npm test` 61 of 61 pass; live run through `executeRun` returned `ok` with 20 podcasts, a bad seed reported as ignored, and `seed_not_usable` for an all-bad seed.
+
+Still open: three or more live briefs checked by eye, browser pass against live data, hosting and env setup, public repo check, Devpost text.

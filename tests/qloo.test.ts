@@ -115,6 +115,41 @@ test("search accepts results as an array or keyed by entities", async () => {
   assert.equal((await searchEntity("y", "t", createBudget())).data![0].id, "y");
 });
 
+test("recommendations accept `id` as well as `entity_id`, and keep provenance entityId", async () => {
+  stubLive(() => ({ body: { results: [{ id: "p1", name: "Pod One" }] } }));
+  const env = await recommendPodcasts({ seedEntityIds: ["w"] }, createBudget());
+  assert.equal(env.status, "ok");
+  assert.equal(env.data![0].id, "p1");
+  assert.equal(env.data![0].provenance.entityId, "p1");
+});
+
+test("a 400 on signal.interests.entities is the typed seed_not_usable, other 4xx stay qloo_http_N", async () => {
+  const errors = [{ message: "All of the provided signal.interests.entities were invalid.", path: "signal.interests.entities" }];
+  stubLive(() => ({ status: 400, body: { errors } }));
+  const env = await recommendPodcasts({ seedEntityIds: ["w"] }, createBudget());
+  assert.equal(env.status, "degraded");
+  assert.equal(env.error, "seed_not_usable");
+  assert.equal(env.data, null);
+  stubLive(() => ({ status: 400, body: { errors: [{ message: "take", path: "take" }] } }));
+  assert.equal((await recommendPodcasts({ seedEntityIds: ["w"] }, createBudget())).error, "qloo_http_400");
+  stubLive(() => ({ status: 400, rawText: "not json" }));
+  assert.equal((await recommendPodcasts({ seedEntityIds: ["w"] }, createBudget())).error, "qloo_http_400");
+});
+
+test("seeds Qloo reports as unusable in warnings are surfaced, not silently dropped", async () => {
+  stubLive(() => ({
+    body: {
+      results: { entities: [entity("p1", "Pod")] },
+      warnings: [{ type: "not_found", "signal.interests.entities": ["bad", "not-sent"] }],
+    },
+  }));
+  const env = await recommendPodcasts({ seedEntityIds: ["good", "bad"] }, createBudget());
+  assert.equal(env.status, "ok");
+  assert.deepEqual(env.ignoredSeedIds, ["bad"]);
+  stubLive(() => ({ body: { results: { entities: [entity("p1", "Pod")] } } }));
+  assert.deepEqual((await recommendPodcasts({ seedEntityIds: ["good"] }, createBudget())).ignoredSeedIds, []);
+});
+
 test("optional enrichments: empty and partial payloads are typed, never thrown", async () => {
   stubLive(() => ({ body: { results: { demographics: [] } } }));
   const d = await audienceOf("p", createBudget());

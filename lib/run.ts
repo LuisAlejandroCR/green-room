@@ -35,6 +35,7 @@ export interface RunResponse {
   candidates: { name: string; options: Candidate[] }[];
   unresolved: string[];
   notFetched: string[];
+  ignoredSeeds: string[]; // names Qloo could not use as a signal; they did not shape the results
   error?: string;
   budget: { used: number; max: number };
 }
@@ -54,6 +55,7 @@ export async function executeRun(input: RunInput, budget: Budget = createBudget(
     candidates: [],
     unresolved: [],
     notFetched: [],
+    ignoredSeeds: [],
     budget: { used: 0, max: budget.max },
   };
   const finish = (patch: Partial<RunResponse>): RunResponse => ({
@@ -93,5 +95,6 @@ export async function executeRun(input: RunInput, budget: Budget = createBudget(
   if (rec.status === "budget_exhausted") return finish({ state: "partial", error: rec.error, notFetched: ["recommendations"] });
   if (rec.status === "degraded" || rec.status === "malformed") return finish({ state: rec.status, mode: rec.mode, error: rec.error });
   if (rec.status === "empty" || !rec.data?.length) return finish({ state: "empty", mode: rec.mode });
-  return finish({ state: "ok", mode: rec.mode, results: rec.data });
+  const ignoredSeeds = names.filter((_, i) => rec.ignoredSeedIds.includes(ids[i]));
+  return finish({ state: "ok", mode: rec.mode, results: rec.data, ignoredSeeds });
 }
