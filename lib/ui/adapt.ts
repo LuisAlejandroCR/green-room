@@ -49,7 +49,7 @@ function adaptShow(r: unknown): UiShow | null {
 export function adaptRun(raw: unknown): UiRun {
   const empty: UiRun = {
     state: "malformed", mode: null, workId: null, shows: [], resolved: [], candidates: [],
-    unresolved: [], notFetched: [], budget: null,
+    unresolved: [], notFetched: [], ignoredSeeds: [], budget: null,
   };
   if (!isRecord(raw)) return empty;
   if (raw.error && !raw.state) return { ...empty, state: "failed", note: str(raw.error) };
@@ -73,6 +73,7 @@ export function adaptRun(raw: unknown): UiRun {
     ),
     unresolved: strList(raw.unresolved),
     notFetched: strList(raw.notFetched),
+    ignoredSeeds: strList(raw.ignoredSeeds),
     budget: isRecord(raw.budget) && num(raw.budget.used) !== undefined && num(raw.budget.max) !== undefined
       ? { used: raw.budget.used, max: raw.budget.max }
       : null,

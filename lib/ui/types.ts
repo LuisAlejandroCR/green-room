@@ -47,6 +47,7 @@ export interface UiRun {
   candidates: UiCandidateGroup[];
   unresolved: string[];
   notFetched: string[];
+  ignoredSeeds: string[];
   budget: { used: number; max: number } | null;
   retryAfterSeconds?: number;
   note?: string;
