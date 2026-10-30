@@ -29,6 +29,16 @@ A dark forest-green "listening room" frame around warm ivory product surfaces, e
 - **Modes stay distinct.** `LIVE`, `RECORDED` and `SAMPLE` have separate badges. SAMPLE is chosen only by `QLOO_MODE=sample`. A live failure, or live mode without a key, returns a typed degraded state, never sample data. RECORDED is reserved; no recording exists yet.
 - **No tie rule, no booking claims.** Affinity is Qloo's score for the combined inputs, not a probability and not listener overlap.
 
+## Live smoke test
+
+`npm run smoke:qloo` checks the real API contract. It requires `QLOO_API_KEY` in your local environment (export it; never pass it as an argument) and prints `blocked: missing QLOO_API_KEY` without it.
+
+It runs: search (one type, and the multi-type list the app sends), podcast insights, a popularity-filter probe, compare, demographics, a malformed request (must be a 4xx) and an empty search. Output is structural only: endpoint, parameter names, HTTP status, field paths with JS types, result counts, numeric rate-limit headers, and a pass/fail verdict per expected path. It never prints the key or any response value and writes nothing to disk. Do not commit recordings or live responses.
+
+## Rate limiting
+
+`/api/run` and `/api/show` are limited per client IP (6 and 20 requests per minute) plus a global cap per route (40 and 120 per minute). Over the limit the server answers a typed `429 {state: "rate_limited", retryAfterSeconds}` with `Retry-After`, and makes no Qloo request. The limiter is in memory (no Redis): it is best-effort per server instance, bounded to 5000 tracked IPs, and fails closed when full. The client IP comes from `x-real-ip`, else the last `x-forwarded-for` entry; unknown clients share one bucket.
+
 ## Run
 
 ```bash
@@ -46,7 +56,7 @@ Live mode: set `QLOO_MODE=live` and `QLOO_API_KEY` (server-only, never `NEXT_PUB
 
 ## Status
 
-Validated against stubbed responses and sample fixtures only. No live Qloo call has been made, so response shapes (including `/search` type filters and the explainability payload) are unverified. See `PROGRESS.md`.
+Validated against stubbed responses and sample fixtures only. No live Qloo call has been made (the live smoke test is blocked without a key), so response shapes are documented but not live-verified: see `PROGRESS.md` for the exact list. Nothing is deployed.
 
 Release requirement: the hackathon needs a public repository with a visible open-source license. The MIT license is in `LICENSE`; repository visibility has not been verified and must be checked manually before submitting.
 

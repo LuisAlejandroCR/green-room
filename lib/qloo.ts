@@ -112,6 +112,15 @@ const numberMap = (v: unknown): Record<string, number> =>
     ? Object.fromEntries(Object.entries(v).filter((kv): kv is [string, number] => num(kv[1]) !== undefined))
     : {};
 
+// Documented container forms (official harness 0.1.26 source, not live-verified): `results` is either the array
+// itself or an object keyed by kind, e.g. `results.entities`.
+function listAt(body: unknown, key: string): unknown[] | null {
+  if (!isRecord(body)) return null;
+  if (Array.isArray(body.results)) return body.results;
+  if (isRecord(body.results) && Array.isArray(body.results[key])) return body.results[key] as unknown[];
+  return null;
+}
+
 type Fetched =
   | { kind: "body"; body: unknown }
   | { kind: "fail"; status: QlooStatus; error: string };
@@ -173,8 +182,8 @@ export function searchEntity(query: string, type: string, budget: Budget): Promi
     q,
     budget,
     (b) => {
-      const list = isRecord(b) ? b.results : undefined;
-      if (!Array.isArray(list)) return null;
+      const list = listAt(b, "entities");
+      if (!list) return null;
       const out = list.flatMap((e) => {
         const id = isRecord(e) ? (str(e.entity_id) ?? str(e.id)) : undefined;
         const name = isRecord(e) ? str(e.name) : undefined;
@@ -219,18 +228,19 @@ interface ParsedPodcast {
 }
 
 function parsePodcasts(body: unknown): ParsedPodcast[] | null {
-  const entities = isRecord(body) && isRecord(body.results) ? body.results.entities : undefined;
-  if (!Array.isArray(entities)) return null;
+  const entities = listAt(body, "entities");
+  if (!entities) return null;
   const out = entities.flatMap((e): ParsedPodcast[] => {
     if (!isRecord(e)) return [];
     const id = str(e.entity_id);
     const name = str(e.name);
     if (!id || !name) return [];
     const query = isRecord(e.query) ? e.query : {};
-    // The explainability payload shape is unverified; only a plain string is kept.
     const props = isRecord(e.properties) ? e.properties : {};
-    // `properties.description` is unverified against live data; only a plain string is kept.
-    return [{ id, name, affinity: num(query.affinity), popularity: num(e.popularity), explanation: str(query.explainability), description: str(props.description) }];
+    // Description lives at one of four documented paths (harness source); only a plain string is kept.
+    const description = str(e.short_description) ?? str(e.description) ?? str(props.short_description) ?? str(props.description);
+    // The explainability payload shape is unverified; only a plain string is kept.
+    return [{ id, name, affinity: num(query.affinity) ?? num(e.affinity), popularity: num(e.popularity), explanation: str(query.explainability), description }];
   });
   return entities.length > 0 && out.length === 0 ? null : out;
 }
@@ -269,20 +279,24 @@ export async function recommendPodcasts(
 
 // ---- Optional enrichments: their failure never blocks the shortlist or the pitch draft.
 
-export function audienceOf(podcastId: string, budget: Budget): Promise<QlooEnvelope<Demographics>> {
+export async function audienceOf(podcastId: string, budget: Budget): Promise<QlooEnvelope<Demographics>> {
   const q = new URLSearchParams({ "filter.type": "urn:demographics", "signal.interests.entities": podcastId });
-  return call(
+  const env = await call<Demographics>(
     "/v2/insights",
     q,
     budget,
     (b) => {
-      if (!isRecord(b) || !isRecord(b.results)) return null;
-      const first = Array.isArray(b.results.demographics) ? b.results.demographics[0] : undefined;
+      const rows = listAt(b, "demographics");
+      if (!rows) return null;
+      const first = rows[0];
       const d = isRecord(first) && isRecord(first.query) ? first.query : {};
       return { age: numberMap(d.age), gender: numberMap(d.gender) };
     },
     () => SAMPLE_DEMOGRAPHICS,
   );
+  // A well-formed answer with nothing in it is "empty", not "ok".
+  const nothing = env.data && Object.keys(env.data.age).length + Object.keys(env.data.gender).length === 0;
+  return nothing ? { ...env, status: "empty", data: null } : env;
 }
 
 export function sharedAngles(workId: string, podcastId: string, budget: Budget): Promise<QlooEnvelope<SharedAngle[]>> {
@@ -296,8 +310,8 @@ export function sharedAngles(workId: string, podcastId: string, budget: Budget):
     q,
     budget,
     (b) => {
-      const tags = isRecord(b) && isRecord(b.results) ? b.results.tags : undefined;
-      if (!Array.isArray(tags)) return null;
+      const tags = listAt(b, "tags");
+      if (!tags) return null;
       return tags.flatMap((t) => {
         const tag = isRecord(t) ? str(t.name) : undefined;
         const score = isRecord(t) && isRecord(t.query) ? num(t.query.affinity) : undefined;

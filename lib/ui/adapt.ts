@@ -15,7 +15,7 @@ const isRecord = (v: unknown): v is Record<string, any> => typeof v === "object"
 const num = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined);
 const MODES: Mode[] = ["live", "recorded", "sample"];
-const STATES: RunUiState[] = ["ok", "partial", "empty", "unresolved", "needs_confirmation", "degraded", "malformed"];
+const STATES: RunUiState[] = ["ok", "partial", "empty", "unresolved", "needs_confirmation", "degraded", "malformed", "rate_limited"];
 
 function adaptProvenance(p: unknown): UiProvenance | null {
   if (!isRecord(p)) return null;
@@ -76,6 +76,7 @@ export function adaptRun(raw: unknown): UiRun {
     budget: isRecord(raw.budget) && num(raw.budget.used) !== undefined && num(raw.budget.max) !== undefined
       ? { used: raw.budget.used, max: raw.budget.max }
       : null,
+    ...(num(raw.retryAfterSeconds) !== undefined && { retryAfterSeconds: raw.retryAfterSeconds as number }),
     note: str(raw.error),
   };
   // Results that lost their provenance make the whole response untrustworthy.

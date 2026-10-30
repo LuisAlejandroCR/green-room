@@ -13,5 +13,8 @@ Rules for any agent working in this repo.
 - Demographics and compare are optional enrichments: their failure must not block the shortlist or the pitch draft.
 - Send Qloo only allowed params per `filter.type` (it silently ignores the rest); `take` <= 50.
 - Secrets (`QLOO_API_KEY`, any future JEV key) are server-only: no `NEXT_PUBLIC_*`, never logged, never committed. Do not commit real Qloo responses.
+- Every route that spends Qloo requests must go through `limitRequest` (`lib/guard.ts`): typed 429 with retry guidance, no Qloo call when limited.
+- `npm run smoke:qloo` is the only place that may call Qloo outside the app. It must print structure only (paths, types, counts, statuses, numeric rate-limit headers), never the key or any response value, and write nothing to disk. Never commit recordings or live responses.
+- Do not ask for, create or print an API key. If `QLOO_API_KEY` is absent, record `blocked: missing QLOO_API_KEY` and continue with non-network work.
 - Green Room drafts pitches; it never sends email.
 - Markdown files: this file, `PROGRESS.md`, and the root `README.md` only.

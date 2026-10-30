@@ -90,3 +90,37 @@ test("description is kept only when Qloo returns a plain string", async () => {
   assert.equal(a.description, "A real description");
   assert.equal("description" in b, false);
 });
+
+test("live-shape adaptation: results as array or keyed, four description paths, optional fields stay absent", async () => {
+  stubLive(() => ({
+    body: { results: [
+      entity("a", "A", { short_description: "short" }),
+      entity("b", "B", { description: "top" }),
+      entity("c", "C", { properties: { short_description: "pshort" } }),
+      entity("d", "D", { properties: { description: "pdesc" }, affinity: 0.6 }),
+      entity("e", "E"),
+    ] },
+  }));
+  const data = (await recommendPodcasts({ seedEntityIds: ["w"] }, createBudget())).data!;
+  assert.deepEqual(data.map((p) => p.description), ["short", "top", "pshort", "pdesc", undefined]);
+  assert.equal(data[3].provenance.affinity, 0.6);
+  assert.equal("affinity" in data[4].provenance, false);
+  assert.equal("popularity" in data[4].provenance, false);
+});
+
+test("search accepts results as an array or keyed by entities", async () => {
+  stubLive(() => ({ body: { results: { entities: [entity("x", "X")] } } }));
+  assert.equal((await searchEntity("x", "t", createBudget())).data![0].id, "x");
+  stubLive(() => ({ body: { results: [entity("y", "Y")] } }));
+  assert.equal((await searchEntity("y", "t", createBudget())).data![0].id, "y");
+});
+
+test("optional enrichments: empty and partial payloads are typed, never thrown", async () => {
+  stubLive(() => ({ body: { results: { demographics: [] } } }));
+  const d = await audienceOf("p", createBudget());
+  assert.equal(d.status, "empty");
+  stubLive(() => ({ body: { results: { tags: [{ name: "t" }, { name: "ok", query: { affinity: 0.5 } }] } } }));
+  const { sharedAngles } = await import("../lib/qloo.ts");
+  const a = await sharedAngles("w", "p", createBudget());
+  assert.deepEqual(a.data, [{ tag: "ok", score: 0.5 }]);
+});

@@ -41,3 +41,35 @@ Validation (actual runs):
 - Browser check with Playwright/Chromium against a local mock Qloo server (live mode) and sample mode, desktop 1440x900 and mobile 390x844: loading, results, evidence available, evidence unavailable (compare 500), unresolved, degraded, confirmation, empty and SAMPLE states rendered; mobile receipt shows 3 chips; no send/email control; no horizontal overflow; no JS errors; no mobile control under 44px. The full run was repeated on the final build (after the 44px ring-digit change) with the same results: overflow false on desktop and mobile, 0 JS errors, 3 mobile chips, 0 send/email controls, 0 mobile targets under 44px.
 - Screenshots are local only (not committed): scratchpad `shots/` (desktop and mobile, 12 states each).
 - Not done: keyboard-only and screen-reader pass, dark-mode, real Qloo data (descriptions and themes come from unverified response shapes), image assets from the approved mockup (artwork is generated, not copied).
+
+## Iteration 2: production readiness (1 iteration)
+
+Live smoke: **blocked: missing QLOO_API_KEY**. `npm run smoke:qloo` printed `blocked: missing QLOO_API_KEY` and exited 2. No key was requested or created, and no Qloo request was made.
+
+Contract facts, with their evidence level:
+- Verified live: none.
+- Documented in the official `@qloo/qloo-harness@0.1.26` source (read statically, never executed; not live-verified):
+  - Auth header `X-Api-Key`; base URL for this event `https://hackathon.api.qloo.com`.
+  - `results` is either the array itself or an object keyed by kind (`results.entities`, `results.tags`, `results.demographics`).
+  - Entity ids are `entity_id` (or `id`); `name` is a string; `popularity` is a top-level number.
+  - Description may be at `short_description`, `description`, `properties.short_description` or `properties.description`.
+  - Affinity is `query.affinity` (also `affinity` or `score` on tags).
+- Unverified (smoke test will answer): the multi-type `/search` `types` list, the explainability payload (`query.explainability`), whether `filter.popularity.max` is honored (the app does not send it), exact demographics and compare shapes, rate-limit header names and values.
+
+Changes:
+- `lib/smoke.ts`, `scripts/smoke-qloo.ts`, `npm run smoke:qloo`, `.env.example` note.
+- `lib/qloo.ts`: parsers accept both documented container forms and all four description paths; empty demographics is `empty`, not `ok`. Missing description, themes, popularity, demographics and compare stay explicit in the UI; optional enrichments never block the shortlist or the pitch draft.
+- `lib/rate-limit.ts`, `lib/guard.ts`, wired into `/api/run` and `/api/show`; typed `rate_limited` state in `adapt.ts` and the UI (retry guidance); enrichment shows "rate_limited, retry in Ns".
+
+Validation (actual runs):
+- `npx tsc --noEmit`: pass. `npm test`: 58 tests, 58 pass (new: smoke redaction and structure, rate limiter, guard 429, live-shape adaptation, missing optional fields, rate_limited adaptation). `npx next build`: compiled successfully.
+- Runtime check on the built server (sample mode): 6 requests to `/api/run` from one IP returned 200, the 7th returned 429 with `Retry-After: 60` and the typed body; a different IP and `/api/show` were unaffected.
+- The visual system was not changed.
+
+Remaining before submission (not done here):
+1. Obtain a Qloo key via the event process, export it locally, run `npm run smoke:qloo`, and fix any parser or request assumption it flags (multi-type search, podcast coverage, explainability, popularity param).
+2. Run the app against live Qloo with 3 different briefs; check descriptions, themes and affinities render sensibly.
+3. Choose and configure hosting (for example Vercel) with server-only `QLOO_API_KEY`, `QLOO_MODE=live`, `QLOO_BASE_URL`; deploy; confirm `/api/health` shows the expected sha, mode and `key_present`. The in-memory limiter is per instance there.
+4. Verify the repository is public with the MIT license visible in the About panel (visibility is unverified).
+5. Keyboard-only and screen-reader pass.
+6. Devpost: description, testing instructions with the demo URL, screenshots with live data, English only; submit before the deadline (2026-10-30 23:45 EDT).

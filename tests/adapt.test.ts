@@ -54,3 +54,20 @@ test("description and missing values: present passes through, absent stays absen
   assert.equal(r.shows[0].description, "From Qloo");
   assert.equal(r.shows[1].description, undefined);
 });
+
+test("rate_limited is a typed state with retry guidance and no results", () => {
+  const r = adaptRun({ state: "rate_limited", error: "rate_limited", retryAfterSeconds: 42 });
+  assert.equal(r.state, "rate_limited");
+  assert.equal(r.retryAfterSeconds, 42);
+  assert.equal(r.shows.length, 0);
+});
+
+test("missing optional fields stay explicit through adaptation", () => {
+  const r = adaptRun({ state: "ok", mode: "live", workId: "w", results: [result()] });
+  const s = r.shows[0];
+  assert.equal(s.description, undefined);
+  assert.equal(s.popularity, undefined);
+  assert.equal(s.overlap, undefined);
+  assert.equal(adaptAudience({ status: "empty", data: null }).state, "empty");
+  assert.equal(adaptAngles({ status: "ok", data: [] }).state, "empty");
+});

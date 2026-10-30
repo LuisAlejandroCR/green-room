@@ -1,8 +1,11 @@
+import { limitRequest } from "@/lib/guard";
 import { audienceOf, createBudget, sharedAngles } from "@/lib/qloo";
 import { validId } from "@/lib/run";
 
 // Optional enrichment: always 200 with per-part envelopes so a failure never blocks the shortlist or pitch.
 export async function GET(req: Request) {
+  const limited = limitRequest(req, "show");
+  if (limited) return limited;
   const url = new URL(req.url);
   const work = url.searchParams.get("work");
   const show = url.searchParams.get("show");

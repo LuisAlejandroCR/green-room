@@ -22,7 +22,14 @@ export function useEnrichment(show: UiShow | null, workId: string | null): Enric
     setSt({ loading: true, audience: null, angles: null });
     fetch(`/api/show?work=${encodeURIComponent(workId)}&show=${encodeURIComponent(show.id)}`)
       .then((r) => r.json())
-      .then((j) => !cancelled && setSt({ loading: false, audience: adaptAudience(j.audience), angles: adaptAngles(j.angles) }))
+      .then((j) => {
+        if (cancelled) return;
+        if (j?.state === "rate_limited") {
+          const reason = `rate_limited, retry in ${Number(j.retryAfterSeconds) || 60}s`;
+          return setSt({ loading: false, audience: { state: "unavailable", reason }, angles: { state: "unavailable", reason } });
+        }
+        setSt({ loading: false, audience: adaptAudience(j.audience), angles: adaptAngles(j.angles) });
+      })
       .catch(() => !cancelled && setSt({ loading: false, audience: FAILED, angles: FAILED }));
     return () => { cancelled = true; };
   }, [show?.id, workId]); // eslint-disable-line react-hooks/exhaustive-deps

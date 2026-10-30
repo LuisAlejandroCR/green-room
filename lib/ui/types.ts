@@ -35,6 +35,7 @@ export type RunUiState =
   | "degraded"
   | "malformed"
   | "failed"
+  | "rate_limited"
   | "cancelled";
 
 export interface UiRun {
@@ -47,6 +48,7 @@ export interface UiRun {
   unresolved: string[];
   notFetched: string[];
   budget: { used: number; max: number } | null;
+  retryAfterSeconds?: number;
   note?: string;
 }
 

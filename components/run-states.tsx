@@ -18,6 +18,7 @@ export function RunNotice({ run }: { run: UiRun }) {
     case "degraded": return <Notice>We couldn&apos;t get a usable answer from Qloo ({run.note ?? "unavailable"}). We won&apos;t guess.</Notice>;
     case "malformed": return <Notice>Qloo or the server returned data we couldn&apos;t read, so nothing is shown.</Notice>;
     case "failed": return <Notice>Something went wrong reaching the server. Nothing was invented. Try again.</Notice>;
+    case "rate_limited": return <Notice>Too many searches right now. No Qloo request was made. Try again in {run.retryAfterSeconds ?? 60} seconds.</Notice>;
     case "empty": return <Notice>Qloo found no podcasts for this mix. Try fewer or different seeds.</Notice>;
     case "partial": return <Notice>Partial result: the {run.budget?.max ?? 8}-request budget ran out. Not fetched: {run.notFetched.join("; ")}.</Notice>;
     default: return null;

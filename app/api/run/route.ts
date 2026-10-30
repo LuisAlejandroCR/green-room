@@ -1,9 +1,12 @@
+import { limitRequest } from "@/lib/guard";
 import { executeRun, validId } from "@/lib/run";
 
 const MAX_BODY = 64 * 1024;
 const MAX_FIELD = 200;
 
 export async function POST(req: Request) {
+  const limited = limitRequest(req, "run");
+  if (limited) return limited;
   const text = await req.text();
   if (text.length > MAX_BODY) return Response.json({ error: "too_large" }, { status: 413 });
   let body: { work?: unknown; seeds?: unknown; confirmed?: unknown };
