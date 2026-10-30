@@ -1,0 +1,77 @@
+/* globals.css: Tailwind v4 entry plus the Green Room palette (deep green, lamp amber on warm cream; light theme only). */
+@import "tailwindcss" source(none);
+@source "../";
+@import "tw-animate-css";
+
+/*
+ * Brand fills (--amber) never carry text. Text uses the *-ink variants on their soft backgrounds;
+ * pairs are asserted in tests/contrast.test.ts.
+ */
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--foreground);
+  --color-muted: var(--secondary);
+  --color-muted-foreground: var(--slate);
+  --color-accent: var(--green-soft);
+  --color-accent-foreground: var(--foreground);
+  --color-destructive: var(--alert-ink);
+  --color-destructive-foreground: #ffffff;
+  --color-border: var(--line);
+  --color-input: var(--input);
+  --color-ring: var(--primary);
+  --color-amber: var(--amber);
+  --color-live: var(--green-ink);
+  --color-live-soft: var(--green-soft);
+  --color-recorded: var(--blue-ink);
+  --color-recorded-soft: var(--blue-soft);
+  --color-sample: var(--amber-ink);
+  --color-sample-soft: var(--amber-soft);
+  --color-alert: var(--alert-ink);
+  --color-alert-soft: var(--alert-soft);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+:root {
+  --radius: 0.875rem;
+  --background: #f6f4ee;
+  --foreground: #14201a;
+  --card: #ffffff;
+  --slate: #4b5a52;
+  --line: #dad8cd;
+  --input: #7c8a82; /* control edges need 3:1 against white; --line is for dividers only */
+  --primary: #1f6b4a;
+  --primary-foreground: #ffffff;
+  --secondary: #ebe9df;
+  --amber: #f2b84b;
+  --green-ink: #14663f;
+  --green-soft: #e4f3ea;
+  --blue-ink: #2b4fa3;
+  --blue-soft: #e8eefb;
+  --amber-ink: #7a4f00;
+  --amber-soft: #fff4d6;
+  --alert-ink: #b42318;
+  --alert-soft: #ffedeb;
+  --shadow-soft: 0 1px 2px rgb(20 32 26 / 0.06), 0 10px 28px -14px rgb(20 32 26 / 0.18);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  body { background-color: var(--color-background); color: var(--color-foreground); font-family: var(--font-sans); }
+  :focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+}
+
+@utility shadow-soft { box-shadow: var(--shadow-soft); }

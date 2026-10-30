@@ -31,6 +31,7 @@ export async function POST(req: Request) {
   return Response.json({
     ...rec,
     data: rec.data ? markTies(rec.data) : null,
+    workId: ids[0],
     resolved: resolved.map((r, i) => ({ asked: names[i], matched: r.data![0].name })),
   });
 }
