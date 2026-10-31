@@ -18,12 +18,24 @@ export interface UiShow {
   mode: Mode;
   overlap?: number; // Qloo affinity; absent stays absent
   popularity?: number; // Qloo popularity index; absent stays absent
+  image?: string; // Qloo cover art (https only)
+  channel?: string;
+  episodes?: string;
+  topics?: string[]; // the show's own Qloo tags
   provenance: UiProvenance;
+}
+
+export interface UiCandidate {
+  id: string;
+  name: string;
+  image?: string;
+  kind?: string;
+  detail?: string;
 }
 
 export interface UiCandidateGroup {
   name: string;
-  options: { id: string; name: string }[];
+  options: UiCandidate[];
 }
 
 export type RunUiState =
@@ -48,6 +60,7 @@ export interface UiRun {
   unresolved: string[];
   notFetched: string[];
   ignoredSeeds: string[];
+  influence: { name: string; score: number }[];
   budget: { used: number; max: number } | null;
   retryAfterSeconds?: number;
   note?: string;

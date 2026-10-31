@@ -36,6 +36,7 @@ export interface RunResponse {
   unresolved: string[];
   notFetched: string[];
   ignoredSeeds: string[]; // names Qloo could not use as a signal; they did not shape the results
+  influence: { name: string; score: number }[]; // typed picks by their effect on the top results, highest first
   error?: string;
   budget: { used: number; max: number };
 }
@@ -56,6 +57,7 @@ export async function executeRun(input: RunInput, budget: Budget = createBudget(
     unresolved: [],
     notFetched: [],
     ignoredSeeds: [],
+    influence: [],
     budget: { used: 0, max: budget.max },
   };
   const finish = (patch: Partial<RunResponse>): RunResponse => ({
@@ -96,6 +98,10 @@ export async function executeRun(input: RunInput, budget: Budget = createBudget(
   if (rec.status === "degraded" || rec.status === "malformed") return finish({ state: rec.status, mode: rec.mode, error: rec.error });
   if (rec.status === "empty" || !rec.data?.length) return finish({ state: "empty", mode: rec.mode });
   const ignoredSeeds = names.filter((_, i) => rec.ignoredSeedIds.includes(ids[i]));
+  const influence = rec.influence.flatMap((r) => {
+    const i = ids.indexOf(r.id);
+    return i >= 0 ? [{ name: names[i], score: r.score }] : [];
+  });
   // If the work itself was unusable, comparing against it returns an empty 200 that would read as "no shared angles".
-  return finish({ state: "ok", mode: rec.mode, results: rec.data, ignoredSeeds, workId: ignoredSeeds.includes(names[0]) ? null : ids[0] });
+  return finish({ state: "ok", mode: rec.mode, results: rec.data, ignoredSeeds, influence, workId: ignoredSeeds.includes(names[0]) ? null : ids[0] });
 }

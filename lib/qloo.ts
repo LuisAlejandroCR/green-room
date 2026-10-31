@@ -60,7 +60,15 @@ export interface Provenance {
   popularity?: number;
 }
 
-export interface PodcastResult {
+// Display facts Qloo returned for the show itself (verified live 2026-10-31). Absent stays absent.
+export interface ShowFacts {
+  image?: string;
+  channel?: string;
+  episodes?: string;
+  topics?: string[];
+}
+
+export interface PodcastResult extends ShowFacts {
   id: string;
   name: string;
   description?: string;
@@ -71,6 +79,15 @@ export interface PodcastResult {
 export interface Candidate {
   id: string;
   name: string;
+  image?: string;
+  kind?: string; // "Book", "Film", "Artist", "Brand" from Qloo's types
+  detail?: string; // disambiguation or publication year, to tell editions apart
+}
+
+// Which typed pick shaped the top results most (`query.explainability`, verified live 2026-10-31).
+export interface Influence {
+  id: string;
+  score: number;
 }
 
 export interface Demographics {
@@ -107,6 +124,25 @@ function envelope<T>(
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
 const num = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined);
+// Verified live 2026-10-31: names and descriptions can arrive HTML-escaped ("&amp;"). Decoded as plain text, never as markup.
+const ENTITIES: Record<string, string> = { amp: "&", quot: '"', apos: "'", "#39": "'", lt: "<", gt: ">", nbsp: " " };
+export const decodeText = (v: string): string =>
+  v.replace(/&(amp|quot|apos|#39|lt|gt|nbsp);/g, (_, k: string) => ENTITIES[k]).replace(/&#(\d{1,5});/g, (_, n: string) => String.fromCharCode(Number(n)));
+const text = (v: unknown): string | undefined => {
+  const s = str(v);
+  return s === undefined ? undefined : str(decodeText(s).trim());
+};
+// Every podcast carries the catch-all "Podcasts" tag; it says nothing about the show.
+const NOISE_TOPICS = new Set(["podcasts"]);
+// Only https image URLs are passed to the browser.
+const imageOf = (props: Record<string, unknown>): string | undefined => {
+  const url = isRecord(props.image) ? str(props.image.url) : undefined;
+  return url && /^https:\/\//.test(url) ? url : undefined;
+};
+const KINDS: Record<string, string> = {
+  "urn:entity:book": "Book", "urn:entity:movie": "Film", "urn:entity:artist": "Artist", "urn:entity:brand": "Brand",
+  "urn:entity:podcast": "Podcast", "urn:entity:tv_show": "TV show",
+};
 const numberMap = (v: unknown): Record<string, number> =>
   isRecord(v)
     ? Object.fromEntries(Object.entries(v).filter((kv): kv is [string, number] => num(kv[1]) !== undefined))
@@ -199,9 +235,17 @@ export function searchEntity(query: string, type: string, budget: Budget): Promi
       const list = listAt(b, "entities");
       if (!list) return null;
       const out = list.flatMap((e) => {
-        const id = isRecord(e) ? (str(e.entity_id) ?? str(e.id)) : undefined;
-        const name = isRecord(e) ? str(e.name) : undefined;
-        return id && name ? [{ id, name }] : [];
+        if (!isRecord(e)) return [];
+        const id = str(e.entity_id) ?? str(e.id);
+        const name = text(e.name);
+        if (!id || !name) return [];
+        const props = isRecord(e.properties) ? e.properties : {};
+        const types = Array.isArray(e.types) ? e.types : [];
+        const kind = types.map((t) => (typeof t === "string" ? KINDS[t] : undefined)).find(Boolean);
+        const year = num(props.publication_year);
+        const detail = text(e.disambiguation) ?? (year !== undefined ? String(year) : undefined);
+        const image = imageOf(props);
+        return [{ id, name, ...(image && { image }), ...(kind && { kind }), ...(detail && { detail }) }];
       });
       return list.length > 0 && out.length === 0 ? null : out;
     },
@@ -232,7 +276,7 @@ export function buildPodcastQuery(input: RecommendPodcastsInput): URLSearchParam
   return q;
 }
 
-interface ParsedPodcast {
+interface ParsedPodcast extends ShowFacts {
   id: string;
   name: string;
   affinity?: number;
@@ -248,14 +292,25 @@ function parsePodcasts(body: unknown): ParsedPodcast[] | null {
     if (!isRecord(e)) return [];
     // Same documented id forms as /search: `entity_id`, or `id`.
     const id = str(e.entity_id) ?? str(e.id);
-    const name = str(e.name);
+    const name = text(e.name);
     if (!id || !name) return [];
     const query = isRecord(e.query) ? e.query : {};
     const props = isRecord(e.properties) ? e.properties : {};
     // Description lives at one of four documented paths (harness source); only a plain string is kept.
-    const description = str(e.short_description) ?? str(e.description) ?? str(props.short_description) ?? str(props.description);
+    const description = text(e.short_description) ?? text(e.description) ?? text(props.short_description) ?? text(props.description);
     // The explainability payload shape is unverified; only a plain string is kept.
-    return [{ id, name, affinity: num(query.affinity) ?? num(e.affinity), popularity: num(e.popularity), explanation: str(query.explainability), description }];
+    const topics = (Array.isArray(e.tags) ? e.tags : []).flatMap((t) => {
+      const tag = isRecord(t) ? text(t.name) : undefined;
+      return tag && !NOISE_TOPICS.has(tag.toLowerCase()) ? [tag] : [];
+    });
+    const channel = text(props.channel);
+    const facts: ShowFacts = {
+      ...(imageOf(props) && { image: imageOf(props) }),
+      ...(channel && channel !== name && { channel }),
+      ...(str(props.episode_count) && { episodes: str(props.episode_count) }),
+      ...(topics.length && { topics: [...new Set(topics)].slice(0, 6) }),
+    };
+    return [{ id, name, affinity: num(query.affinity) ?? num(e.affinity), popularity: num(e.popularity), explanation: str(query.explainability), description, ...facts }];
   });
   return entities.length > 0 && out.length === 0 ? null : out;
 }
@@ -271,17 +326,33 @@ function ignoredSeedIds(body: unknown, sent: string[]): string[] {
   return [...new Set(ids)].filter((id) => sent.includes(id));
 }
 
+// The literal dotted key, as with warnings. Only ids the request sent are kept; sorted by effect, highest first.
+function influenceOf(body: unknown, sent: string[]): Influence[] {
+  const q = isRecord(body) && isRecord(body.query) ? body.query : {};
+  const ex = isRecord(q.explainability) ? q.explainability : {};
+  const sig = isRecord(ex.signal) && isRecord(ex.signal.interests) && isRecord(ex.signal.interests.entities)
+    ? ex.signal.interests.entities
+    : isRecord(ex["signal.interests.entities"]) ? ex["signal.interests.entities"] : {};
+  const rows = Array.isArray((sig as Record<string, unknown>).effect_on_top10_recs) ? (sig as Record<string, unknown[]>).effect_on_top10_recs : [];
+  return rows
+    .flatMap((r) => (isRecord(r) && str(r.entity_id) && num(r.avg_score) !== undefined ? [{ id: r.entity_id as string, score: r.avg_score as number }] : []))
+    .filter((r) => sent.includes(r.id))
+    .sort((a, b) => b.score - a.score);
+}
+
 export async function recommendPodcasts(
   input: RecommendPodcastsInput,
   budget: Budget,
-): Promise<QlooEnvelope<PodcastResult[]> & { ignoredSeedIds: string[] }> {
+): Promise<QlooEnvelope<PodcastResult[]> & { ignoredSeedIds: string[]; influence: Influence[] }> {
   let ignored: string[] = [];
+  let influence: Influence[] = [];
   const env = await call<ParsedPodcast[]>(
     "/v2/insights",
     buildPodcastQuery(input),
     budget,
     (b) => {
       ignored = ignoredSeedIds(b, input.seedEntityIds);
+      influence = influenceOf(b, input.seedEntityIds);
       return parsePodcasts(b);
     },
     () => SAMPLE_PODCASTS,
@@ -292,6 +363,10 @@ export async function recommendPodcasts(
         id: p.id,
         name: p.name,
         ...(p.description !== undefined && { description: p.description }),
+        ...(p.image && { image: p.image }),
+        ...(p.channel && { channel: p.channel }),
+        ...(p.episodes && { episodes: p.episodes }),
+        ...(p.topics && { topics: p.topics }),
         mode: env.mode,
         provenance: {
           entityId: p.id,
@@ -304,7 +379,7 @@ export async function recommendPodcasts(
         },
       }))
     : null;
-  return { ...env, source, data, ignoredSeedIds: ignored };
+  return { ...env, source, data, ignoredSeedIds: ignored, influence };
 }
 
 // ---- Optional enrichments: their failure never blocks the shortlist or the pitch draft.

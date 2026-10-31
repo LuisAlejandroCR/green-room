@@ -159,3 +159,56 @@ test("optional enrichments: empty and partial payloads are typed, never thrown",
   const a = await sharedAngles("w", "p", createBudget());
   assert.deepEqual(a.data, [{ tag: "ok", score: 0.5 }]);
 });
+
+test("show facts: https cover, decoded text, topics without the catch-all tag; absent stays absent", async () => {
+  stubLive(() => ({
+    body: {
+      results: {
+        entities: [
+          entity("p1", "Tom &amp; Jerry&#39;s Show", {
+            properties: { image: { url: "https://img.example/p1.jpg" }, channel: "Big Network", episode_count: "15" },
+            tags: [{ name: "Podcasts" }, { name: "Business" }, { name: "Business" }, { name: "Health &amp; Fitness" }],
+          }),
+          entity("p2", "Plain", { properties: { image: { url: "http://insecure.example/p2.jpg" }, channel: "Plain" } }),
+        ],
+      },
+    },
+  }));
+  const [a, b] = (await recommendPodcasts({ seedEntityIds: ["w"] }, createBudget())).data!;
+  assert.equal(a.name, "Tom & Jerry's Show");
+  assert.equal(a.image, "https://img.example/p1.jpg");
+  assert.equal(a.channel, "Big Network");
+  assert.deepEqual(a.topics, ["Business", "Health & Fitness"]);
+  assert.equal("image" in b, false); // http is never passed on
+  assert.equal("channel" in b, false); // same as the name: says nothing
+  assert.equal("topics" in b, false);
+});
+
+test("influence: per-seed effect from explainability, only sent ids, highest first", async () => {
+  stubLive(() => ({
+    body: {
+      results: { entities: [entity("p1", "Pod")] },
+      query: { explainability: { signal: { interests: { entities: { effect_on_top10_recs: [
+        { entity_id: "a", avg_score: 0.4 }, { entity_id: "b", avg_score: 0.6 }, { entity_id: "x", avg_score: 0.9 }, { entity_id: "a" },
+      ] } } } } },
+    },
+  }));
+  const env = await recommendPodcasts({ seedEntityIds: ["a", "b"] }, createBudget());
+  assert.deepEqual(env.influence, [{ id: "b", score: 0.6 }, { id: "a", score: 0.4 }]);
+  stubLive(() => ({ body: { results: { entities: [entity("p1", "Pod")] } } }));
+  assert.deepEqual((await recommendPodcasts({ seedEntityIds: ["a"] }, createBudget())).influence, []);
+});
+
+test("search candidates carry kind, edition detail and cover so people can tell them apart", async () => {
+  stubLive(() => ({
+    body: { results: [
+      entity("b1", "A &amp; B", { types: ["urn:entity:book"], disambiguation: "2018, Author", properties: { image: { url: "https://img.example/b1.jpg" } } }),
+      entity("m1", "A Film", { types: ["urn:entity:movie"], properties: { publication_year: 2014 } }),
+    ] },
+  }));
+  const env = await searchEntity("A", "t", createBudget());
+  assert.deepEqual(env.data, [
+    { id: "b1", name: "A & B", image: "https://img.example/b1.jpg", kind: "Book", detail: "2018, Author" },
+    { id: "m1", name: "A Film", kind: "Film", detail: "2014" },
+  ]);
+});
