@@ -13,11 +13,11 @@ Green Room only drafts. It never sends email.
 
 ## Visual direction
 
-A dark forest-green "listening room" frame around warm ivory product surfaces, editorial serif display type (system serif stack, no web fonts) with clean sans UI, subtle cobalt route lines and one restrained amber accent. Artwork is abstract botanical/landscape SVG generated from the result id (`components/art.tsx`); there are no stock photos and no people.
+Warm paper, a deep forest-green structure, Fraunces for headlines and Hanken Grotesk for interface (both self-hosted, OFL). Images are real: Qloo cover art for every podcast and for each search candidate (`properties.image.url`, https only). Generated cut-paper SVG art (`components/art.tsx`) is used only when Qloo has no image. Each show gets a colour from its id (`lib/ui/vibes.ts`); colour never encodes a score.
 
-- **Desktop (1024px+):** dark nav (Discover, Shortlists, Receipts), ivory workspace (hero, campaign brief, top 3 matches sorted by affinity) and a dark "Proof, not promise." evidence panel for the selected match. The pitch opens in a side sheet.
-- **Mobile:** one decision per screen: Discover ("Your 3 matches": art, title, score), Receipt ("Why this match": score, up to 3 theme chips, source, retrieved, data mode, JEV state) and Pitch ("Pitch notes": short editable draft with a "Review before using" notice). Icon-first bottom navigation, 44px minimum targets.
-- Affinity is shown on Qloo's own 0-1 scale (never as a percentage) and always described as thematic alignment, not audience size, access, or booking likelihood.
+- **Desktop (1024px+):** a dark sidebar (Discover, Saved), a paper workspace (hero, campaign card with the work's cover and "Edit brief", ranked matches with covers, topics and affinity rings) and a sticky dark "Proof, not promise." panel for the selected match: topics or shared themes, source and query id, retrieval time, data mode, popularity with its note, and which of your picks shaped the list (Qloo explainability). Pitch Studio opens in a side sheet with Copy.
+- **Android / phone (below 1024px):** straight to the point and jargon-free. Start (one-tap real example, then your own brief), "Which one did you mean?" with real covers, Matches (big #1 card, ranked list, hearts), "Why it fits" (cover, fit ring, Known for, Who listens, About), Your pitch (edit, Copy, Save) and Saved. Motion on entry, rings, bars and hearts; all of it stops under `prefers-reduced-motion`. Controls are at least 44px and screens never scroll horizontally.
+- Affinity stays on Qloo's 0-1 scale on desktop. The phone shows the same value out of 100 as "fit", described as shared taste, never as a booking promise.
 - Descriptions come from Qloo only (`properties.description`, unverified shape). When absent the row says "Description unavailable from Qloo". Theme chips show at most 3 and fewer when Qloo returns fewer.
 - JEV is not connected: the UI says so and never claims a review happened. There is no send or email action anywhere.
 
@@ -26,7 +26,7 @@ A dark forest-green "listening room" frame around warm ivory product surfaces, e
 - **Request budget.** One run (one `/api/run` or `/api/show` request) makes at most 8 Qloo requests, retries included. If the budget runs out the response is `partial` and lists exactly what was not fetched.
 - **Result-level provenance.** Every podcast carries `{ entityId, queryId, source, retrievedAt, affinity?, explanation?, popularity? }`. Missing fields stay missing. A result without provenance is not displayed. The detail panel shows this as a receipt.
 - **Popularity.** Shown as "Qloo popularity index" only when Qloo returns it, always with: "Popularity is a Qloo index. It is not audience size, access, or booking likelihood." It is never used as a filter, and there are no reach tiers.
-- **Modes stay distinct.** `LIVE`, `RECORDED` and `SAMPLE` have separate badges. SAMPLE is selected only by an explicit **Try demo** action or `QLOO_MODE=sample` for local development. A live failure, or live mode without a key, returns a typed degraded state, never sample data. RECORDED is reserved; no recording exists yet.
+- **Modes stay distinct.** `LIVE`, `RECORDED` and `SAMPLE` have separate badges. SAMPLE is selected only by `QLOO_MODE=sample` for local development; the demo button uses live data. A live failure, or live mode without a key, returns a typed degraded state, never sample data. RECORDED is reserved; no recording exists yet.
 - **No tie rule, no booking claims.** Affinity is Qloo's score for the combined inputs, not a probability and not listener overlap.
 
 ## Live smoke test
@@ -56,7 +56,7 @@ Live mode: set `QLOO_MODE=live` and `QLOO_API_KEY` (server-only, never `NEXT_PUB
 
 ## Status
 
-Validated against stubbed responses and sample fixtures only. No live Qloo call has been made (the live smoke test is blocked without a key), so response shapes are documented but not live-verified: see `PROGRESS.md` for the exact list. Nothing is deployed.
+Live-verified on 2026-10-31 (`npm run smoke:qloo`: 8 pass) and exercised in the browser against live Qloo on desktop and phone sizes; see `PROGRESS.md`. Nothing is deployed.
 
 Release requirement: the hackathon needs a public repository with a visible open-source license. The MIT license is in `LICENSE`; repository visibility has not been verified and must be checked manually before submitting.
 

@@ -1,22 +1,12 @@
+// demo.test.ts: the demo brief is a pre-confirmed live brief: every name has a valid, human-picked ID.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { executeDemo } from "../lib/demo.ts";
+import { DEMO_BRIEF } from "../lib/demo.ts";
+import { validId } from "../lib/run.ts";
 
-test("demo is deterministic, marked sample, and makes no Qloo request", () => {
-  const input = { work: "A bright idea", seeds: ["Design"], confirmed: {} };
-  const first = executeDemo(input);
-  const second = executeDemo(input);
-  assert.equal(first.state, "ok");
-  assert.deepEqual(first, second);
-  assert.equal(first.mode, "sample");
-  assert.ok(first.results.every((result) => result.mode === "sample"));
-  assert.ok(first.results.every((result) => result.provenance.source.includes("no Qloo request")));
-  assert.equal(first.budget.used, 0);
-});
-
-test("demo preserves explicit ambiguity confirmation", () => {
-  const run = executeDemo({ work: "ambiguous book", seeds: [], confirmed: {} });
-  assert.equal(run.state, "needs_confirmation");
-  assert.equal(run.results.length, 0);
-  assert.equal(run.candidates.length, 1);
+test("demo brief confirms every name it sends, so the app never picks an ID", () => {
+  const names = [DEMO_BRIEF.work, ...DEMO_BRIEF.seeds];
+  assert.ok(names.length <= 4);
+  for (const name of names) assert.ok(validId(DEMO_BRIEF.confirmed[name]), name);
+  assert.deepEqual(Object.keys(DEMO_BRIEF.confirmed).sort(), [...names].sort());
 });

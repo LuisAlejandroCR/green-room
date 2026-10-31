@@ -93,3 +93,38 @@ Changes:
 Validation: `npm run typecheck` pass; `npm test` 61 of 61 pass; live run through `executeRun` returned `ok` with 20 podcasts, a bad seed reported as ignored, and `seed_not_usable` for an all-bad seed.
 
 Still open: three or more live briefs checked by eye, browser pass against live data, hosting and env setup, public repo check, Devpost text.
+
+## Iteration 4: editorial redesign from the two reference boards (2026-10-31)
+
+UI only; no change to endpoints, Qloo rules, budgets or data handling. Added: self-hosted fonts (`app/fonts`), `app/icon.svg`, `components/{sidebar,campaign,progress}.tsx`; the ring (`components/affinity.tsx`) replaced the earlier figure-and-rule. Search, filters, tabs, "Why this match?" and a mobile bottom bar were deliberately not built because nothing behind them exists. Match themes show only on the selected match (the only one with enrichment). Shortlists and Receipts list the current run only.
+
+Validation (actual runs, sample mode): typecheck pass; `npm test` 71 of 71; `npm run build` ok. E2E (`artifacts/e2e/scripts`): web 1280x800 PASS; Android 14 emulator (Chrome 113, 391 css px) PASS with the soft keyboard, 44px touch targets, no horizontal overflow and no focused field under the action bar. Not verified: live-data rendering of the new screens, screen reader and keyboard-only passes, devices other than the emulator.
+
+## Iteration 5: vivid web + Android redesign on live data (2026-10-31) - spec
+
+Goal: rebuild the web and the Android (mobile web) experience from the two reference boards. Android goes straight to the point with no jargon, motion, colour and real images. Data is real (live Qloo); one explicit demo button runs a ready-made brief against live Qloo.
+
+Gaps filled, from `qloo-knowledge-base` and the smoke run of 2026-10-31 (8 pass):
+- Real images: Qloo returns `properties.image.url` for podcasts and for `/search` hits; the app ignored it. Covers show on every match and on the "pick your book" step; generated art is the fallback when Qloo has no image.
+- Real topics per show: podcast entities carry `tags[].name`; shown as the show's topics without an extra request. Shared themes from compare stay as an optional extra.
+- Show facts: `properties.channel` and `episode_count` when present; absent stays absent.
+- Influence: `query.explainability` returns, per seed, its effect on the top results; the desktop evidence panel names which of your picks shaped the list. Not shown on mobile.
+- Save locally (BRAINSTORM P1): bookmark a match, "Saved" lists it on this device (localStorage), no account.
+- Demo: the button now runs a fixed, pre-confirmed brief against live Qloo instead of synthetic fixtures. Sample mode stays only for `QLOO_MODE=sample`, labelled SAMPLE.
+
+Acceptance:
+1. Live mode: a typed brief and the demo button both return real podcasts with cover images, topics and affinity; nothing synthetic is shown as real.
+2. Mobile (<1024px): five screens (Start, Pick, Matches, Why it fits, Pitch) plus Saved; plain words (no "affinity", "entity", "seed", "Qloo index"); animated entry, ring and cards; honours `prefers-reduced-motion`; 44px targets; no horizontal overflow.
+3. Desktop (>=1024px): dark sidebar, campaign card, ranked rows with covers, dark "Proof, not promise." panel with source, retrieval time, popularity note and influence.
+4. Rules in AGENTS.md hold: provenance on every result, no silent ID choice, no fallback to sample, never sends email.
+5. `npm run typecheck`, `npm test`, `npm run build` pass; browser check at 1280 and 390 against live data.
+
+### Iteration 5 - validation (actual runs, 2026-10-31)
+
+- `npm run smoke:qloo` (live key from `.env.local`, never printed): 8 pass. New paths seen: `properties.image.url` on podcasts and search hits, `properties.channel`, `properties.episode_count`, `tags[].name`, top-level `query.explainability.signal.interests.entities.effect_on_top10_recs[]`.
+- Live finding: names can arrive HTML-escaped (`&amp;`); the parser now decodes them as plain text. Every podcast carries the tag "Podcasts"; it is dropped as noise.
+- Live finding: several book editions are not usable as a signal (Atomic Habits main editions, Sapiens); the run reports them as ignored. The demo uses the Atomic Habits bundle that Qloo accepts plus Nike Training Club: 20 podcasts, 0 ignored, influence returned for both picks.
+- `npm run typecheck`: pass. `npm test`: 91 of 91 (new: cover, decoding and topics; influence; search candidate kind/detail/cover; demo brief is fully confirmed; contrast for every vibe colour and the demo gradient). `npm run build`: compiled.
+- Browser (live mode, dev server): phone 390x844 - Start, demo run, Matches with real covers, Why it fits with live audience bars, Your pitch, typed brief "Interstellar" + "Patagonia" through "Which one did you mean?" with real covers, save and Saved; no horizontal overflow; 0 controls under 44px. Desktop 1280x800 - demo run, campaign card, ranked rows, evidence panel with source, retrieval, LIVE badge, popularity note and influence, Pitch Studio sheet. No console errors from the app.
+- Removed: the synthetic `/api/demo` route (the demo is live now), `components/{brief-form,matches,receipt,campaign,sidebar,progress,nav,affinity}.tsx`, `components/ui/skeleton.tsx`.
+- Not verified: a real Android device or emulator for this iteration, screen reader and keyboard-only passes, deployed hosting. Shared themes from compare stayed empty for the briefs tried; the UI shows the show's own Qloo topics instead and labels them as such.

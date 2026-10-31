@@ -1,15 +1,7 @@
-// run-states.tsx: every non-success state of a run is explicit: loading, empty, degraded, malformed, partial, cancelled.
-import { Skeleton } from "@/components/ui/skeleton";
+// run-states.tsx: every non-success state of a run is explicit on desktop: empty, degraded, malformed, partial, cancelled.
+// The phone layout words the same states without jargon (PlainNotice in mobile.tsx).
 import { Notice } from "./status";
 import type { UiRun } from "@/lib/ui/types";
-
-export function LoadingRows({ count = 3 }: { count?: number }) {
-  return (
-    <div role="status" aria-label="Asking Qloo" className="space-y-3">
-      {Array.from({ length: count }, (_, i) => <Skeleton key={i} className="h-[4.5rem] w-full rounded-2xl" />)}
-    </div>
-  );
-}
 
 export function RunNotice({ run }: { run: UiRun }) {
   switch (run.state) {
