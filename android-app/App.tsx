@@ -262,7 +262,7 @@ function DeckScreen({ run, deck, kept, details, onDetail, onDecide, onPicks, onR
           <Text style={s.h2}>{show.name}</Text>
           <Fact label="Fit" value={fit !== undefined ? `${fit} out of 100` : "Not available"} />
           <Fact label="Shared themes" value={detail ? (detail.angles.join(", ") || "None returned") : "Loading…"} />
-          <Fact label="Biggest age groups" value={detail ? (detail.ages.join(", ") || "Not available") : "Loading…"} />
+          <Fact label="Ages that lean in most" value={detail ? (detail.ages.join(", ") || "Not available") : "Loading…"} />
           {show.episodes && <Fact label="Episodes" value={show.episodes} />}
           <View style={{ marginTop: 16 }}><Button label="Close" kind="ghost" onPress={() => setFacts(false)} /></View>
         </View>

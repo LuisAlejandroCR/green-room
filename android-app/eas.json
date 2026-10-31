@@ -10,7 +10,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE": "https://SET-YOUR-VERCEL-URL.vercel.app"
+        "EXPO_PUBLIC_API_BASE": "https://app-green-room.vercel.app"
       }
     },
     "production": {
