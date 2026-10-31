@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   const work = clean(body.work);
   const seeds = (Array.isArray(body.seeds) ? body.seeds : []).map(clean).filter(Boolean).slice(0, 3);
   if (!work) return Response.json({ error: "work_required" }, { status: 400 });
-  const confirmed = typeof body.confirmed === "object" && body.confirmed !== null
+  const confirmed: Record<string, string> = typeof body.confirmed === "object" && body.confirmed !== null
     ? Object.fromEntries(Object.entries(body.confirmed).flatMap(([name, id]) => {
       const cleanName = clean(name);
       return cleanName && typeof id === "string" ? [[cleanName, id]] : [];
