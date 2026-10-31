@@ -186,7 +186,7 @@ export function InfluencePanel({ g }: { g: GreenRoom }) {
           <ul className="mt-3 space-y-3 text-sm">
             {st.data.without.map((w) => (
               <li key={w.name}>
-                <p className="font-semibold">Without {w.name}: {w.state === "ok" ? `${w.kept} of the top ${st.data!.topCount} stay` : `unavailable (${w.error ?? w.state})`}</p>
+                <p className="font-semibold">Without {w.name}: {w.state === "ok" ? `${w.kept} of the top ${st.data!.topCount} ${w.kept === 1 ? "stays" : "stay"}` : `unavailable (${w.error ?? w.state})`}</p>
                 {w.state === "ok" && (
                   <p className="text-muted-foreground">{w.entered?.length ? `Joins: ${w.entered.slice(0, 3).join(", ")}${w.entered.length > 3 ? "…" : ""}. ` : ""}{w.left?.length ? `Drops: ${w.left.slice(0, 3).join(", ")}${w.left.length > 3 ? "…" : ""}.` : "Nothing drops."}</p>
                 )}
@@ -356,7 +356,7 @@ export function BaselinePanel({ g }: { g: GreenRoom }) {
           {st.names ? (
             <>
               <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">{st.names.map((n) => <li key={n}>{n}</li>)}</ol>
-              <p className="mt-2 text-xs text-muted-foreground">{st.model}. Names not verified, no entity ids, no scores. {both} of {st.names.length} also appear in the Qloo top 8.</p>
+              <p className="mt-2 text-xs text-muted-foreground">{st.model}. Names not verified, no entity ids, no scores. {both} of {st.names.length} also {both === 1 ? "appears" : "appear"} in the Qloo top 8.</p>
             </>
           ) : (
             <Button className="mt-2" variant="outline" onClick={ask} disabled={st.loading}>{st.loading ? "Asking the model…" : "Ask a model without Qloo"}</Button>

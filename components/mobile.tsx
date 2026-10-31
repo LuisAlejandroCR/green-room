@@ -275,11 +275,11 @@ function DeckScreen({ g, deck, kept, onDecide, onRestart, onPicks }: {
       </header>
       <p className="mt-2 text-center text-sm text-muted-foreground" aria-live="polite">{deck.length} left · swipe right to keep, left to skip</p>
 
-      <div className="relative mt-3 flex-1">
+      <div className="relative mt-3 min-h-[26rem] flex-1">
         {deck[1] && <div aria-hidden="true" className="absolute inset-x-3 top-3 bottom-0 rounded-3xl" style={{ background: vibeOf(deck[1].id).fill, opacity: 0.45 }} />}
         <article
           aria-label={`${top.name}. Fit ${top.overlap !== undefined ? Math.round(top.overlap * 100) : "not available"} out of 100.`}
-          className="relative h-full touch-pan-y select-none overflow-hidden rounded-3xl text-white shadow-[0_18px_40px_-18px_rgb(15_42_32/0.6)]"
+          className="absolute inset-0 touch-pan-y select-none overflow-hidden rounded-3xl text-white shadow-[0_18px_40px_-18px_rgb(15_42_32/0.6)]"
           style={{ background: v.fill, transform: `translateX(${offset}px) rotate(${offset / 22}deg)`, transition: start.current ? "none" : "transform 180ms ease-out" }}
           onPointerDown={(e) => { start.current = { x: e.clientX, moved: false }; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); }}
           onPointerMove={(e) => { if (!start.current) return; const d = e.clientX - start.current.x; if (Math.abs(d) > 6) start.current.moved = true; setDx(d); }}

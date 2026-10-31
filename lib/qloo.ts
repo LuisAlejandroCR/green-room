@@ -498,12 +498,15 @@ export function tasteOf(entityId: string, budget: Budget): Promise<QlooEnvelope<
     (b) => {
       const tags = listAt(b, "tags");
       if (!tags) return null;
+      const seen = new Set<string>(); // Qloo can return two tags with the same name (genre and keyword)
       return tags.flatMap((t) => {
         if (!isRecord(t)) return [];
         const id = str(t.tag_id) ?? str(t.id);
         const name = text(t.name);
         const score = isRecord(t.query) ? num(t.query.affinity) : undefined;
-        return id && name && score !== undefined && !NOISE_TOPICS.has(name.toLowerCase()) ? [{ id, name, score }] : [];
+        if (!id || !name || score === undefined || NOISE_TOPICS.has(name.toLowerCase()) || seen.has(name)) return [];
+        seen.add(name);
+        return [{ id, name, score }];
       });
     },
     () => [],

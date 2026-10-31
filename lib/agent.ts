@@ -16,7 +16,9 @@ export const agentConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
 
 let client: Anthropic | null = null;
 function anthropic(): Anthropic {
-  client ??= new Anthropic({ timeout: TIMEOUT_MS, maxRetries: 1 });
+  // Explicit key and base URL: the server must not pick up an ambient ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN
+  // from the shell it was started in.
+  client ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, authToken: null, baseURL: "https://api.anthropic.com", timeout: TIMEOUT_MS, maxRetries: 1 });
   return client;
 }
 
