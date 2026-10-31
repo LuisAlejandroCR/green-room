@@ -46,6 +46,8 @@ export default function Home() {
   const [editing, setEditing] = useState(false);
   const [pitch, setPitch] = useState<{ id: string; text: string } | null>(null);
   const [pitchOpen, setPitchOpen] = useState(false);
+  // Demo is explicit and synthetic-only; the normal path remains live Qloo.
+  const [demoRequested, setDemoRequested] = useState(false);
 
   const shows = useMemo(
     () => [...(run?.shows ?? [])].sort((a, b) => (b.overlap ?? -1) - (a.overlap ?? -1)),
@@ -55,14 +57,14 @@ export default function Home() {
   const selected = shows.find((s) => s.id === selectedId) ?? (desktop ? (shows[0] ?? null) : null);
   const enr = useEnrichment(selected, run?.workId ?? null);
 
-  async function post(confirmed: Record<string, string>) {
+  async function post(confirmed: Record<string, string>, demo = false) {
     setBusy(true);
     setSelectedId(null);
     setPitch(null);
     setScreen("main");
     setView("discover");
     try {
-      const r = await fetch("/api/run", { method: "POST", body: JSON.stringify({ work, seeds: parseSeeds(seeds), confirmed }) });
+      const r = await fetch(demo ? "/api/demo" : "/api/run", { method: "POST", body: JSON.stringify({ work, seeds: parseSeeds(seeds), confirmed }) });
       setRun(adaptRun(await r.json()));
       setEditing(false);
     } catch {
@@ -70,8 +72,9 @@ export default function Home() {
     }
     setBusy(false);
   }
-  const submit = () => { setChoices({}); void post({}); };
-  const confirm = () => run && void post({ ...Object.fromEntries(run.resolved.map((r) => [r.name, r.id])), ...choices });
+  const submit = () => { setChoices({}); setDemoRequested(false); void post({}); };
+  const tryDemo = () => { setChoices({}); setDemoRequested(true); void post({}, true); };
+  const confirm = () => run && void post({ ...Object.fromEntries(run.resolved.map((r) => [r.name, r.id])), ...choices }, demoRequested);
   const cancel = () => {
     setChoices({});
     setRun({ state: "cancelled", mode: null, workId: null, shows: [], resolved: [], candidates: [], unresolved: [], notFetched: [], ignoredSeeds: [], budget: null });
@@ -84,7 +87,7 @@ export default function Home() {
   };
 
   const form = (compact: boolean) => (
-    <BriefForm work={work} seeds={seeds} setWork={setWork} setSeeds={setSeeds} busy={busy} onSubmit={submit} compact={compact} />
+    <BriefForm work={work} seeds={seeds} setWork={setWork} setSeeds={setSeeds} busy={busy} onSubmit={submit} onDemo={tryDemo} compact={compact} />
   );
   const confirmStep = run?.state === "needs_confirmation" && !busy ? (
     <ConfirmStep groups={run.candidates} choices={choices} setChoice={(n, id) => setChoices((c) => ({ ...c, [n]: id }))} onConfirm={confirm} onCancel={cancel} />
