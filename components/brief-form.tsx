@@ -1,7 +1,7 @@
 // brief-form.tsx: the campaign brief (work + up to 3 listener interests) and the entity confirmation step.
 "use client";
 
-import { Loader2, Search } from "lucide-react";
+import { FlaskConical, Loader2, Search } from "lucide-react";
 import { Art } from "./art";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,9 +12,9 @@ export function parseSeeds(raw: string): string[] {
   return raw.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-export function BriefForm({ work, seeds, setWork, setSeeds, busy, onSubmit, compact }: {
+export function BriefForm({ work, seeds, setWork, setSeeds, busy, onSubmit, onDemo, compact }: {
   work: string; seeds: string; setWork: (v: string) => void; setSeeds: (v: string) => void;
-  busy: boolean; onSubmit: () => void; compact?: boolean;
+  busy: boolean; onSubmit: () => void; onDemo: () => void; compact?: boolean;
 }) {
   const chips = parseSeeds(seeds);
   return (
@@ -40,8 +40,11 @@ export function BriefForm({ work, seeds, setWork, setSeeds, busy, onSubmit, comp
         </div>
         <Button type="submit" size="lg" className="h-12 w-full" disabled={busy || !work.trim()}>
           {busy ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Search aria-hidden="true" />}
-          {busy ? "Asking Qloo…" : "Build my booking list"}
+          {busy ? "Asking Qloo…" : "Find live matches"}
         </Button>
+        <button type="button" onClick={onDemo} disabled={busy || !work.trim()} className="min-h-11 w-full rounded-xl border border-input bg-transparent px-4 text-sm font-semibold text-foreground hover:bg-secondary disabled:pointer-events-none disabled:opacity-50">
+          <FlaskConical className="mr-2 inline size-4" aria-hidden="true" />Try demo <span className="text-muted-foreground">· SAMPLE, not Qloo data</span>
+        </button>
       </div>
     </form>
   );
