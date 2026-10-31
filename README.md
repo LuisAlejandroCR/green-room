@@ -20,7 +20,7 @@ Warm paper, a deep forest-green structure, Fraunces for headlines and Hanken Gro
 - **Android app (`android-app/`):** native React Native screens built with Expo, mirroring the phone flow (see below).
 - Affinity stays on Qloo's 0-1 scale on desktop. The phone shows the same value out of 100 as "fit", described as shared taste, never as a booking promise.
 - Descriptions come from Qloo only (`properties.description`, unverified shape). When absent the row says "Description unavailable from Qloo". Theme chips show at most 3 and fewer when Qloo returns fewer.
-- Pitch Studio: Claude drafts from the Qloo evidence only and JEV reviews the draft against that evidence. When either is not configured the UI says so and never claims a draft or review happened; the deterministic draft (`lib/pitch.ts`) is the labelled fallback. There is no send or email action anywhere.
+- Pitch Studio: Claude drafts from the Qloo evidence only and JEV reviews the draft against that evidence. Model calls go to OpenRouter first (`OP_API_KEY`, `OP_BASE_URL`, model `anthropic/claude-sonnet-5.5`) and to Anthropic (`ANTHROPIC_API_KEY`) when OpenRouter is not set or fails. When either is not configured the UI says so and never claims a draft or review happened; the deterministic draft (`lib/pitch.ts`) is the labelled fallback. There is no send or email action anywhere.
 
 ## Guarantees
 

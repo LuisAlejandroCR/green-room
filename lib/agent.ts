@@ -1,10 +1,12 @@
 // agent.ts: the two Claude calls Green Room makes per brief (BRAINSTORM): suggest which candidate a typed name most
 // likely means, and draft the pitch from Qloo evidence only. Plus the neutral model-only baseline used on the web
-// desk for comparison. Server-only key (ANTHROPIC_API_KEY); without it every call returns a typed "unavailable".
+// desk for comparison. Provider order: OpenRouter first (OP_API_KEY + OP_BASE_URL), then Anthropic (ANTHROPIC_API_KEY)
+// when OpenRouter is not configured or fails. Server-only keys; with neither, every call returns a typed "unavailable".
 // Never throws. Claude never picks an ID: a suggestion is shown, the person still chooses.
 import Anthropic from "@anthropic-ai/sdk";
 
 export const AGENT_MODEL = "claude-sonnet-5-5";
+export const OPENROUTER_MODEL = "anthropic/claude-sonnet-5.5"; // the same model under OpenRouter's id (/api/v1/models)
 const TIMEOUT_MS = 20_000;
 
 export type AgentResult<T> =
@@ -12,7 +14,13 @@ export type AgentResult<T> =
   | { status: "unavailable"; reason: string }
   | { status: "failed"; reason: string };
 
-export const agentConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
+/** OpenRouter base URL without a trailing slash, only when both the key and an https base URL are set. */
+function openRouterBase(): string | null {
+  const base = process.env.OP_BASE_URL?.trim().replace(/\/+$/, "");
+  return process.env.OP_API_KEY && base && /^https:\/\//.test(base) ? base : null;
+}
+const anthropicConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
+export const agentConfigured = () => Boolean(openRouterBase()) || anthropicConfigured();
 
 let client: Anthropic | null = null;
 function anthropic(): Anthropic {
@@ -22,9 +30,41 @@ function anthropic(): Anthropic {
   return client;
 }
 
-/** One generative call. User-supplied text goes in as JSON data, never as instructions. */
+/** One generative call: OpenRouter first, Anthropic when OpenRouter is missing or fails. User-supplied text goes in
+ * as JSON data, never as instructions. */
 async function ask(system: string, data: unknown, maxTokens: number): Promise<AgentResult<string>> {
-  if (!agentConfigured()) return { status: "unavailable", reason: "missing ANTHROPIC_API_KEY" };
+  if (!agentConfigured()) return { status: "unavailable", reason: "missing OP_API_KEY and ANTHROPIC_API_KEY" };
+  const user = `<data>\n${JSON.stringify(data)}\n</data>`;
+  const base = openRouterBase();
+  if (base) {
+    const r = await askOpenRouter(base, system, user, maxTokens);
+    if (r.status === "ok" || !anthropicConfigured()) return r;
+  }
+  return askAnthropic(system, user, maxTokens);
+}
+
+async function askOpenRouter(base: string, system: string, user: string, maxTokens: number): Promise<AgentResult<string>> {
+  try {
+    const res = await fetch(`${base}/chat/completions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.OP_API_KEY}`, "Content-Type": "application/json", "X-Title": "Green Room" },
+      body: JSON.stringify({ model: OPENROUTER_MODEL, max_tokens: maxTokens, messages: [{ role: "system", content: system }, { role: "user", content: user }] }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (res.status === 429) return { status: "failed", reason: "rate_limited" };
+    if (res.status === 401 || res.status === 403) return { status: "failed", reason: "auth_failed" };
+    if (!res.ok) return { status: "failed", reason: `api_error_${res.status}` };
+    const j = (await res.json()) as { model?: unknown; choices?: { finish_reason?: unknown; message?: { content?: unknown } }[] };
+    const choice = j.choices?.[0];
+    if (choice?.finish_reason === "content_filter") return { status: "failed", reason: "model_refused" };
+    const text = typeof choice?.message?.content === "string" ? choice.message.content.trim() : "";
+    return text ? { status: "ok", data: text, model: typeof j.model === "string" ? j.model : OPENROUTER_MODEL } : { status: "failed", reason: "empty_response" };
+  } catch (e) {
+    return { status: "failed", reason: e instanceof Error && e.name === "TimeoutError" ? "timeout" : "unreachable" };
+  }
+}
+
+async function askAnthropic(system: string, user: string, maxTokens: number): Promise<AgentResult<string>> {
   try {
     const res = await anthropic().beta.messages.create({
       model: AGENT_MODEL,
@@ -33,7 +73,7 @@ async function ask(system: string, data: unknown, maxTokens: number): Promise<Ag
       fallbacks: "default",
       output_config: { effort: "low" },
       system,
-      messages: [{ role: "user", content: `<data>\n${JSON.stringify(data)}\n</data>` }],
+      messages: [{ role: "user", content: user }],
     });
     if (res.stop_reason === "refusal") return { status: "failed", reason: "model_refused" };
     const text = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("").trim();
