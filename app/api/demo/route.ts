@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   const confirmed: Record<string, string> = typeof body.confirmed === "object" && body.confirmed !== null
     ? Object.fromEntries(Object.entries(body.confirmed).flatMap(([name, id]) => {
       const cleanName = clean(name);
-      return cleanName && typeof id === "string" ? [[cleanName, id]] : [];
+      return cleanName && typeof id === "string" ? [[cleanName, id] as [string, string]] : [];
     }).slice(0, 4))
     : {};
 
