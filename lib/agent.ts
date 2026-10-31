@@ -17,10 +17,14 @@ export type AgentResult<T> =
 /** OpenRouter base URL without a trailing slash, only when both the key and an https base URL are set. */
 function openRouterBase(): string | null {
   const base = process.env.OP_BASE_URL?.trim().replace(/\/+$/, "");
-  return process.env.OP_API_KEY && base && /^https:\/\//.test(base) ? base : null;
+  return openRouterKey() && base && /^https:\/\//.test(base) ? base : null;
 }
+// Trimmed: a key pasted into a hosting dashboard can carry a trailing newline, which makes the header invalid.
+const openRouterKey = () => process.env.OP_API_KEY?.trim() || null;
 const anthropicConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
 export const agentConfigured = () => Boolean(openRouterBase()) || anthropicConfigured();
+/** Which providers are configured, for /api/health. Booleans only, never values. */
+export const agentProviders = () => ({ openrouter: Boolean(openRouterBase()), anthropic: anthropicConfigured() });
 
 let client: Anthropic | null = null;
 function anthropic(): Anthropic {
@@ -39,6 +43,7 @@ async function ask(system: string, data: unknown, maxTokens: number): Promise<Ag
   if (base) {
     const r = await askOpenRouter(base, system, user, maxTokens);
     if (r.status === "ok" || !anthropicConfigured()) return r;
+    console.warn(`agent: openrouter ${r.reason}, falling back to anthropic`); // reason only, never the key or text
   }
   return askAnthropic(system, user, maxTokens);
 }
@@ -47,7 +52,7 @@ async function askOpenRouter(base: string, system: string, user: string, maxToke
   try {
     const res = await fetch(`${base}/chat/completions`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${process.env.OP_API_KEY}`, "Content-Type": "application/json", "X-Title": "Green Room" },
+      headers: { Authorization: `Bearer ${openRouterKey()}`, "Content-Type": "application/json", "X-Title": "Green Room" },
       body: JSON.stringify({ model: OPENROUTER_MODEL, max_tokens: maxTokens, messages: [{ role: "system", content: system }, { role: "user", content: user }] }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });

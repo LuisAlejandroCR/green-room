@@ -2,7 +2,7 @@
 // fetch is mocked; no network call is made and no real key is used.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { agentConfigured, baselineGuess, draftPitchWithClaude, OPENROUTER_MODEL } from "../lib/agent.ts";
+import { agentConfigured, agentProviders, baselineGuess, draftPitchWithClaude, OPENROUTER_MODEL } from "../lib/agent.ts";
 
 type Handler = (url: string, init: RequestInit) => Response;
 let handler: Handler = () => new Response("{}", { status: 500 });
@@ -66,4 +66,19 @@ test("OpenRouter needs both the key and an https base URL", async () => {
   handler = () => anthropicOk("ok");
   await draftPitchWithClaude(EVIDENCE);
   assert.deepEqual(calls.map((c) => new URL(c.url).host), ["api.anthropic.com"]);
+});
+
+test("a pasted key with a trailing newline is trimmed before it reaches the header", async () => {
+  env({ OP_API_KEY: "test-op\n", OP_BASE_URL: "https://openrouter.example/api/v1" });
+  let auth = "";
+  handler = (_url, init) => { auth = new Headers(init.headers).get("authorization") ?? ""; return openRouterOk("ok"); };
+  assert.equal((await draftPitchWithClaude(EVIDENCE)).status, "ok");
+  assert.equal(auth, "Bearer test-op");
+});
+
+test("health reports which providers are configured, as booleans only", () => {
+  env({ OP_API_KEY: "test-op", ANTHROPIC_API_KEY: "test-an" });
+  assert.deepEqual(agentProviders(), { openrouter: false, anthropic: true }); // no OP_BASE_URL
+  env({ OP_API_KEY: "test-op", OP_BASE_URL: "https://openrouter.example/api/v1" });
+  assert.deepEqual(agentProviders(), { openrouter: true, anthropic: false });
 });
