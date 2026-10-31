@@ -83,7 +83,7 @@ async function probe(o: SmokeOptions, path: string, params: Record<string, strin
   try {
     const res = await f(`${o.baseUrl}${path}?${new URLSearchParams(params)}`, {
       headers: { "X-Api-Key": o.key },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(15000),
     });
     let body: Json = null;
     try {
@@ -119,9 +119,16 @@ function check(
     rateLimit: p.headers,
     expectations: expected.map((e) => ({ ...e, present: hasPath(paths, e.path) })),
     outcome: outcomeOk(p, count) ? "pass" : "fail",
-    note: p.error ?? note,
+    note: p.error ?? (errorParams(p.body).length ? `${note ? `${note}; ` : ""}rejected params: ${errorParams(p.body).join(", ")}` : note),
   };
 }
+
+// A 4xx names the offending request parameter in `errors[].path`. That is a parameter name (structure), so it is kept;
+// it is shown only when it looks like a dotted param key, never free text.
+const errorParams = (body: Json): string[] =>
+  isRecord(body) && Array.isArray(body.errors)
+    ? body.errors.flatMap((e) => (isRecord(e) && typeof e.path === "string" && /^[a-z_.]{1,60}$/.test(e.path) ? [e.path] : []))
+    : [];
 
 const skipped = (name: string, path: string, why: string): SmokeCheck => ({
   name, endpoint: `GET ${path}`, paramKeys: [], httpStatus: null, resultCount: null, fieldPaths: [], rateLimit: {},
@@ -200,6 +207,7 @@ export async function runSmoke(o: SmokeOptions): Promise<SmokeCheck[]> {
       checks.push(check("demographics", "/v2/insights", dParams, d, "demographics", [
         { path: "results.demographics[].query.age", required: false }, { path: "results.demographics[].query.gender", required: false },
       ], (p) => ok200(p), "optional enrichment"));
+      checks.push(...(await deskChecks(o, workId, rows)));
     } else {
       checks.push(skipped("compare", "/v2/analysis/compare", "no podcast id from insights"));
       checks.push(skipped("demographics", "/v2/insights", "no podcast id from insights"));
@@ -215,6 +223,56 @@ export async function runSmoke(o: SmokeOptions): Promise<SmokeCheck[]> {
   const e = await probe(o, "/search", eParams);
   checks.push(check("empty search", "/search", eParams, e, "results", [], (p) => ok200(p), "informational: live search is fuzzy, so a nonsense name can still return candidates; the user confirmation step is the guard"));
   return checks;
+}
+
+// Endpoints the campaign desk uses (iteration 6): ID re-verification, taste analysis of the work, shortlist ranking in
+// one request, tag search, heatmap and trending. Same rule: structure only.
+async function deskChecks(o: SmokeOptions, workId: string, rows: Json[]): Promise<SmokeCheck[]> {
+  const ids = rows.flatMap((r) => (isRecord(r) && typeof r.entity_id === "string" ? [r.entity_id] : [])).slice(0, 3);
+  const out: SmokeCheck[] = [];
+  const ok200 = (p: Probe) => p.status === 200;
+
+  const eParams = { entity_ids: [workId, ...ids.slice(0, 1)].join(",") };
+  out.push(check("entities by id (server re-verification)", "/entities", eParams, await probe(o, "/entities", eParams), "entities", [
+    { path: "results[].entity_id", required: false }, { path: "results[].name", required: false }, { path: "results[].types", required: false },
+  ], (p, n) => ok200(p) && (n ?? 0) > 0));
+
+  const tParams = { "filter.type": "urn:tag", "signal.interests.entities": workId, take: "8" };
+  out.push(check("taste analysis of the work", "/v2/insights", tParams, await probe(o, "/v2/insights", tParams), "tags", [
+    { path: "results.tags[].name", required: false }, { path: "results.tags[].tag_id", required: false }, { path: "results.tags[].query.affinity", required: false },
+  ], (p, n) => ok200(p) && (n ?? 0) > 0));
+
+  const rParams = { "filter.type": "urn:entity:podcast", "signal.interests.entities": workId, "filter.results.entities": ids.join(","), take: String(ids.length) };
+  out.push(check("shortlist ranked in one request", "/v2/insights", rParams, await probe(o, "/v2/insights", rParams), "entities", [
+    { path: "results.entities[].entity_id", required: false }, { path: "results.entities[].query.affinity", required: false },
+  ], (p, n) => ok200(p) && (n ?? 0) > 0));
+
+  const sParams = { "filter.query": "habits", take: "5" };
+  out.push(check("tag search", "/v2/tags", sParams, await probe(o, "/v2/tags", sParams), "tags", [
+    { path: "results.tags[].name", required: false }, { path: "results.tags[].id", required: false },
+  ], (p, n) => ok200(p) && (n ?? 0) > 0));
+
+  const hParams = { "filter.type": "urn:heatmap", "signal.interests.entities": ids[0] ?? workId, "filter.location.query": "United States" };
+  out.push(check("heatmap (informational)", "/v2/insights", hParams, await probe(o, "/v2/insights", hParams), "heatmap", [
+    { path: "results.heatmap[].location", required: false }, { path: "results.heatmap[].query", required: false },
+  ], (p) => ok200(p), "web-only enrichment; podcast coverage unknown"));
+
+  const end = new Date();
+  const start = new Date(end.getTime() - 42 * 86_400_000);
+  const day = (d: Date) => d.toISOString().slice(0, 10);
+  const trParams = { "filter.type": "urn:entity:podcast", "signal.interests.entities": ids[0] ?? workId, "filter.start_date": day(start), "filter.end_date": day(end) };
+  out.push(check("trending podcasts (informational)", "/v2/trending", trParams, await probe(o, "/v2/trending", trParams), "trending", [
+    { path: "results.trending[].entity_id", required: false }, { path: "results.trending[].query", required: false },
+  ], (p) => ok200(p), "web-only sparkline; a 200 with 0 results means Qloo has no podcast trends for the window"));
+  // "More like this": a show's own tag as an extra signal next to the work.
+  const firstTag = rows.flatMap((r) => (isRecord(r) && Array.isArray(r.tags) ? r.tags : [])).find((t) => isRecord(t) && typeof t.id === "string" && t.name !== "Podcasts");
+  if (isRecord(firstTag) && typeof firstTag.id === "string") {
+    const gParams = { "filter.type": "urn:entity:podcast", "signal.interests.entities": workId, "signal.interests.tags": firstTag.id, take: "10" };
+    out.push(check("podcasts with a tag signal", "/v2/insights", gParams, await probe(o, "/v2/insights", gParams), "entities", [
+      { path: "results.entities[].entity_id", required: false },
+    ], (p, n) => ok200(p) && (n ?? 0) > 0));
+  }
+  return out;
 }
 
 export function formatReport(checks: SmokeCheck[], secrets: string[]): string {
