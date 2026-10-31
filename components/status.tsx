@@ -1,4 +1,4 @@
-// status.tsx: data-mode pill, tags, review status and notices. Data mode is always icon + text, never color alone.
+// status.tsx: data-mode pill, the affinity and popularity notes, and notices. Data mode is always icon + text, never color alone.
 // These are secondary to the results: small, flat, set in the interface sans.
 import { AlertCircle, CheckCircle2, FlaskConical, History } from "lucide-react";
 import type { Mode } from "@/lib/ui/types";
@@ -22,18 +22,6 @@ export function ModeBadge({ mode, short, className }: { mode: Mode; short?: bool
 
 export const POPULARITY_NOTE = "Popularity is a Qloo index. It is not audience size, access, or booking likelihood.";
 export const AFFINITY_NOTE = "Affinity is thematic alignment from Qloo. It is not audience size, access, or booking likelihood.";
-
-/** JEV is not connected yet: the state says so instead of implying a review happened. */
-export function JevStatus({ compact }: { compact?: boolean }) {
-  return (
-    <div className="text-sm">
-      <p className="font-semibold">JEV · Human review</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        {compact ? "JEV not connected. You review before using." : "JEV is not connected yet. Nothing has been auto-reviewed; you review every draft before using it."}
-      </p>
-    </div>
-  );
-}
 
 export function Notice({ children, tone = "alert" }: { children: React.ReactNode; tone?: "alert" | "amber" }) {
   return (

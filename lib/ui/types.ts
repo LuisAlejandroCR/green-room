@@ -22,6 +22,7 @@ export interface UiShow {
   channel?: string;
   episodes?: string;
   topics?: string[]; // the show's own Qloo tags
+  topicIds?: string[]; // Qloo tag ids, same order as topics
   provenance: UiProvenance;
 }
 
@@ -31,6 +32,7 @@ export interface UiCandidate {
   image?: string;
   kind?: string;
   detail?: string;
+  tags?: string[];
 }
 
 export interface UiCandidateGroup {
@@ -61,6 +63,9 @@ export interface UiRun {
   notFetched: string[];
   ignoredSeeds: string[];
   influence: { name: string; score: number }[];
+  seedIds: string[];
+  taste: { id: string; name: string; score: number }[];
+  recordedAt?: string; // RECORDED tour only
   budget: { used: number; max: number } | null;
   retryAfterSeconds?: number;
   note?: string;
