@@ -16,10 +16,11 @@ Green Room only drafts. It never sends email.
 Warm paper, a deep forest-green structure, Fraunces for headlines and Hanken Grotesk for interface (both self-hosted, OFL). Images are real: Qloo cover art for every podcast and for each search candidate (`properties.image.url`, https only). Generated cut-paper SVG art (`components/art.tsx`) is used only when Qloo has no image. Each show gets a colour from its id (`lib/ui/vibes.ts`); colour never encodes a score.
 
 - **Desktop (1024px+):** a dark sidebar (Discover, Saved), a paper workspace (hero, campaign card with the work's cover and "Edit brief", ranked matches with covers, topics and affinity rings) and a sticky dark "Proof, not promise." panel for the selected match: topics or shared themes, source and query id, retrieval time, data mode, popularity with its note, and which of your picks shaped the list (Qloo explainability). Pitch Studio opens in a side sheet with Copy.
-- **Android / phone (below 1024px):** straight to the point and jargon-free. Start (one-tap real example, then your own brief), "Which one did you mean?" with real covers, Matches (big #1 card, ranked list, hearts), "Why it fits" (cover, fit ring, Known for, Who listens, About), Your pitch (edit, Copy, Save) and Saved. Motion on entry, rings, bars and hearts; all of it stops under `prefers-reduced-motion`. Controls are at least 44px and screens never scroll horizontally.
+- **Phone web (below 1024px):** straight to the point and jargon-free. Start (one-tap real example, then your own brief), optional "fans also love" with Qloo tag chips, "Which one did you mean?" with real covers, a card deck (swipe right keeps, left skips, every gesture has a button, "More like this") and "Your 3 picks" with Copy pitch and Share. Motion stops under `prefers-reduced-motion`. Controls are at least 48px and screens never scroll horizontally.
+- **Android app (`android-app/`):** native React Native screens built with Expo, mirroring the phone flow (see below).
 - Affinity stays on Qloo's 0-1 scale on desktop. The phone shows the same value out of 100 as "fit", described as shared taste, never as a booking promise.
 - Descriptions come from Qloo only (`properties.description`, unverified shape). When absent the row says "Description unavailable from Qloo". Theme chips show at most 3 and fewer when Qloo returns fewer.
-- JEV is not connected: the UI says so and never claims a review happened. There is no send or email action anywhere.
+- Pitch Studio: Claude drafts from the Qloo evidence only and JEV reviews the draft against that evidence. When either is not configured the UI says so and never claims a draft or review happened; the deterministic draft (`lib/pitch.ts`) is the labelled fallback. There is no send or email action anywhere.
 
 ## Guarantees
 
@@ -50,13 +51,33 @@ npm test
 npm run build
 ```
 
-Demo mode: select **Try demo** in the campaign brief. It makes no Qloo request and always displays `SAMPLE · Not Qloo data`; include the word "ambiguous" in a name to see the confirmation step.\n\nConfigured sample mode remains available for local development via `QLOO_MODE=sample`.
+Demo: **See a real example** runs a fixed, human-confirmed brief (Atomic Habits + Nike Training Club, `lib/demo.ts`) against live Qloo like any typed brief.
+
+Sample mode is for local development only (`QLOO_MODE=sample`), always labelled `SAMPLE · Not Qloo data`; include the word "ambiguous" in a name to see the confirmation step.
 
 Live mode: set `QLOO_MODE=live` and `QLOO_API_KEY` (server-only, never `NEXT_PUBLIC_`). `GET /api/health` reports `{sha, mode, key_present}`.
 
+## Android app (Expo, APK)
+
+`android-app/` is a separate Expo project with native React Native screens: Start, optional "fans also love", "Which one did you mean?", the swipe deck with a Qloo facts sheet, and "Your 3 picks" with Copy pitch and Android Share. It calls only the deployed `/api/run` and `/api/show`; `QLOO_API_KEY`, `JEV_API_KEY` and the Claude key stay on the server and are never in the APK. The API base is `EXPO_PUBLIC_API_BASE`, set per profile in `android-app/eas.json`; a build without it opens on an "API not configured" screen.
+
+```bash
+cd android-app
+npm install
+npm run typecheck
+npx eas-cli@latest login      # your Expo account
+npm run build:apk             # EAS cloud build, profile "preview", buildType "apk"
+```
+
+EAS prints a download link for the `.apk` when the build finishes. Package: `com.luisalejandrocr.greenroom`.
+
+## CI
+
+`.github/workflows/ci.yml` runs on pull requests and pushes to `main`: web typecheck, tests and build in sample mode (no keys), and for the Android app typecheck, `expo-doctor` and a Metro bundle against the preview API base. The APK is built by EAS, not in CI.
+
 ## Status
 
-Live-verified on 2026-10-31 (`npm run smoke:qloo`: 8 pass) and exercised in the browser against live Qloo on desktop and phone sizes; see `PROGRESS.md`. Nothing is deployed.
+Deployed at https://app-green-room.vercel.app (live Qloo; `/api/health` reports `{sha, mode, key_present}`). Live-verified with `npm run smoke:qloo` and exercised in the browser against live Qloo on desktop and phone sizes; see `PROGRESS.md`. The Android APK has not been built or installed on a device yet.
 
 Release requirement: the hackathon needs a public repository with a visible open-source license. The MIT license is in `LICENSE`; repository visibility has not been verified and must be checked manually before submitting.
 
