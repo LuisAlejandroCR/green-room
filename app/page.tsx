@@ -107,7 +107,7 @@ export default function Home() {
         <header className="relative mx-auto mb-5 flex max-w-[84rem] items-center gap-6">
           <LeafMark className="size-9 text-primary" />
           <p className="font-display text-4xl font-semibold">Green Room</p>
-          <p className="border-l border-on-dark-line pl-6 text-xs uppercase tracking-[0.25em] text-on-dark-muted">Podcast outreach<br />for real ideas</p>
+          <p className="border-l border-on-dark-line pl-6 text-xs uppercase tracking-[0.25em] text-on-dark-muted">Podcast outreach<br />for bright ideas</p>
         </header>
         <div className="relative mx-auto grid max-w-[84rem] grid-cols-[13rem_minmax(0,1fr)_21rem] overflow-hidden rounded-3xl border border-on-dark-line shadow-2xl">
           <Sidebar view={view} onChange={setView} />
@@ -116,7 +116,7 @@ export default function Home() {
               <>
                 <div>
                   <h1 className="font-display text-4xl font-semibold leading-tight">Find the conversation<br />your story deserves.</h1>
-                  <p className="mt-2 text-muted-foreground">Audience affinity from Qloo, with a receipt for every match.</p>
+                  <p className="mt-2 text-muted-foreground">AI research. Human judgment. Evidence with every match.</p>
                 </div>
                 {form(false)}
                 {confirmStep}
