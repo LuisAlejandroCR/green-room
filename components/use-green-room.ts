@@ -8,6 +8,7 @@ import { DEMO_BRIEF } from "@/lib/demo";
 import { draftPitch } from "@/lib/pitch";
 import { adaptRun } from "@/lib/ui/adapt";
 import { workTitle } from "@/lib/ui/candidates";
+import { randomWork } from "@/lib/ui/random";
 import type { UiCandidate, UiRun, UiShow } from "@/lib/ui/types";
 import { themesOf, useEnrichment } from "./use-enrichment";
 
@@ -130,11 +131,14 @@ export function useGreenRoom() {
     }
   }
 
+  // An empty field is not an error: a random well-known title is typed in and run like any brief (lib/ui/random.ts).
   const submit = (override?: { seeds: string; tags: TagSignal[] }) => {
-    if (!work.trim() || busy) return;
+    if (busy) return;
+    const typed = work.trim() || randomWork(brief?.work);
+    if (!work.trim()) setWork(typed);
     setChoices({});
     setPicked({});
-    void post({ work: work.trim(), seeds: parseSeeds(override?.seeds ?? seeds), confirmed: {} }, false, override?.tags ?? tags);
+    void post({ work: typed, seeds: parseSeeds(override?.seeds ?? seeds), confirmed: {} }, false, override?.tags ?? tags);
   };
 
   const demo = () => {
@@ -177,6 +181,18 @@ export function useGreenRoom() {
     if (!brief || busy || brief.tour) return;
     void post({ work: brief.work, seeds: brief.seeds, confirmed: currentConfirmed() }, brief.demo, [tag]);
   };
+
+  // Campaign card controls: steer the same brief without retyping it. IDs already confirmed are reused.
+  const steer = (next: { seeds?: string[]; tags?: TagSignal[] }) => {
+    if (!brief || busy || brief.tour) return;
+    const nextSeeds = next.seeds ?? brief.seeds;
+    if (next.seeds) setSeeds(nextSeeds.join(", "));
+    if (next.tags) setTags(next.tags);
+    void post({ work: brief.work, seeds: nextSeeds, confirmed: currentConfirmed() }, brief.demo, next.tags ?? brief.tags);
+  };
+  const dropSeed = (name: string) => steer({ seeds: (brief?.seeds ?? []).filter((s) => s !== name) });
+  const addTaste = (tag: TagSignal) => { if (brief && !brief.tags.some((t) => t.id === tag.id)) steer({ tags: [...brief.tags, tag].slice(-3) }); };
+  const dropTaste = (id: string) => steer({ tags: (brief?.tags ?? []).filter((t) => t.id !== id) });
 
   const choose = (name: string, option: UiCandidate) => {
     setChoices((c) => ({ ...c, [name]: option.id }));
@@ -249,7 +265,7 @@ export function useGreenRoom() {
 
   return {
     work, setWork, seeds, setSeeds, tags, setTags, busy, run, brief, shows, selected, selectedId, setSelectedId, enrichment, themes,
-    choices, choose, suggestions, ready, confirm, cancel, reset, submit, demo, tour, moreLike, health,
+    choices, choose, suggestions, ready, confirm, cancel, reset, submit, demo, tour, moreLike, dropSeed, addTaste, dropTaste, health,
     saved, isSaved, toggleSave, save, workFor, pitchFor, setPitch, studio, draft, recheck, workCover,
   };
 }

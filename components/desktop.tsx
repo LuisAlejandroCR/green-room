@@ -61,8 +61,9 @@ export function DesktopApp({ g }: { g: GreenRoom }) {
   const exportAs = (kind: "csv" | "html") => {
     if (!brief || !g.run) return;
     const name = `green-room-${slug(brief.work)}`;
-    if (kind === "csv") download(`${name}.csv`, "text/csv;charset=utf-8", toCsv(g.shows, g.isSaved));
-    else download(`${name}.html`, "text/html;charset=utf-8", toHtmlReport(g.shows, { work: brief.work, seeds: brief.seeds, mode: g.run.mode, recordedAt: g.run.recordedAt }, new Date().toISOString()));
+    const work = g.shows[0] ? g.workFor(g.shows[0]) : brief.work; // the picked title, as in the pitches
+    if (kind === "csv") download(`${name}.csv`, "text/csv;charset=utf-8", toCsv(g.shows, g.isSaved, { work, seeds: brief.seeds }));
+    else download(`${name}.html`, "text/html;charset=utf-8", toHtmlReport(g.shows, { work, seeds: brief.seeds, mode: g.run.mode, recordedAt: g.run.recordedAt, workCover: g.workCover }, new Date().toISOString()));
   };
 
   return (
@@ -91,7 +92,7 @@ export function DesktopApp({ g }: { g: GreenRoom }) {
                     )}
                   </Section>
                   <Section n={2} id="q-shape" q="How did Qloo shape this list?" hint="Which of your picks moved the results, and what changes without each one.">
-                    <InfluencePanel g={g} />
+                    <InfluencePanel g={g} onOpen={open} />
                   </Section>
                   {comparing && compare.length >= 2 && (
                     <Section n={3} id="q-compare" q="How do these shows compare?">
@@ -99,10 +100,10 @@ export function DesktopApp({ g }: { g: GreenRoom }) {
                     </Section>
                   )}
                   <Section n={comparing ? 4 : 3} id="q-where" q="Where do their fans live?">
-                    <HeatmapPanel g={g} />
+                    <HeatmapPanel g={g} onOpen={open} />
                   </Section>
                   <Section n={comparing ? 5 : 4} id="q-baseline" q="What would a model guess without Qloo?">
-                    <BaselinePanel g={g} />
+                    <BaselinePanel g={g} onOpen={open} />
                   </Section>
                 </>
               )}
@@ -167,14 +168,14 @@ function BriefCard({ g }: { g: GreenRoom }) {
           </label>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" size="lg" disabled={g.busy || !g.work.trim()} aria-describedby="brief-hint"><Search aria-hidden="true" />Find live matches</Button>
+          <Button type="submit" size="lg" disabled={g.busy} aria-describedby="brief-hint"><Search aria-hidden="true" />Find live matches</Button>
           <button type="button" onClick={g.demo} disabled={g.busy} className="relative inline-flex h-14 items-center gap-2 overflow-hidden rounded-[3px] bg-gradient-to-r from-[#b8432c] via-[#8a4a00] to-[#6b3a7a] px-6 font-semibold text-white disabled:opacity-50">
             <span aria-hidden="true" className="shine absolute inset-0" />
             <Sparkles className="relative size-4" aria-hidden="true" /><span className="relative">Try the demo · live data</span>
           </button>
         </div>
         <p id="brief-hint" role="status" className="text-sm text-muted-foreground">
-          {!g.work.trim() && !g.busy ? "Type your guest's work to search live, or try the demo." : null}
+          {!g.work.trim() && !g.busy ? "Leave it empty and Find live matches picks a random well-known title for you, or try the demo." : null}
         </p>
       </div>
     </form>
@@ -198,13 +199,34 @@ function Campaign({ g }: { g: GreenRoom }) {
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {run.mode && <ModeBadge mode={run.mode} />}
           {run.recordedAt && <span className="text-xs text-muted-foreground">captured {formatRetrieved(run.recordedAt)}</span>}
-          {b.seeds.map((s) => <span key={s} className="rounded-full px-3 py-0.5 text-sm font-semibold" style={{ background: vibeOf(s).soft }}>{s}</span>)}
-          {b.tags.map((t) => <span key={t.id} className="rounded-full border border-primary px-3 py-0.5 text-sm font-semibold text-primary">+ {t.name}</span>)}
+          {b.seeds.map((s) => (
+            <button key={s} type="button" disabled={g.busy || b.tour} onClick={() => g.dropSeed(s)} title={`Re-run without ${s}`} aria-label={`Re-run without ${s}`}
+              className="group inline-flex min-h-8 items-center gap-1 rounded-full px-3 py-0.5 text-sm font-semibold hover:ring-2 hover:ring-primary disabled:opacity-60" style={{ background: vibeOf(s).soft }}>
+              {s}<X className="size-3.5 opacity-50 group-hover:opacity-100" aria-hidden="true" />
+            </button>
+          ))}
+          {b.tags.map((t) => (
+            <button key={t.id} type="button" disabled={g.busy || b.tour} onClick={() => g.dropTaste(t.id)} aria-label={`Stop steering with ${t.name}`}
+              className="group inline-flex min-h-8 items-center gap-1 rounded-full border border-primary px-3 py-0.5 text-sm font-semibold text-primary hover:bg-primary hover:text-primary-foreground disabled:opacity-60">
+              + {t.name}<X className="size-3.5 opacity-60 group-hover:opacity-100" aria-hidden="true" />
+            </button>
+          ))}
         </div>
         {run.taste.length > 0 && (
           <div className="mt-5">
-            <p className="text-sm font-semibold">What fans of {b.work} are into <span className="font-normal text-muted-foreground">· Qloo taste analysis</span></p>
-            <div className="mt-2 flex flex-wrap gap-1.5">{run.taste.map((t) => <span key={t.id} className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold">{t.name}</span>)}</div>
+            <p className="text-sm font-semibold">What fans of {b.work} are into <span className="font-normal text-muted-foreground">· Qloo taste analysis · click one to steer the list with it</span></p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {run.taste.map((t) => {
+                const on = b.tags.some((x) => x.id === t.id);
+                return (
+                  <button key={t.id} type="button" aria-pressed={on} disabled={g.busy || b.tour} onClick={() => (on ? g.dropTaste(t.id) : g.addTaste({ id: t.id, name: t.name }))}
+                    className={cn("min-h-8 rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors disabled:opacity-60", on ? "bg-primary text-primary-foreground" : "bg-secondary hover:bg-primary/15 hover:ring-1 hover:ring-primary")}>
+                    {on ? "✓ " : "+ "}{t.name}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">A taste you add goes to Qloo as a tag signal next to your work (up to 3). Click a pick above to re-run without it.</p>
           </div>
         )}
       </div>

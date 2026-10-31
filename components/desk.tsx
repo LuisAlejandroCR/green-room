@@ -1,6 +1,7 @@
 // desk.tsx: the sections of the web campaign desk, each answering one question: where are my fans (table and topic
 // crossfilter), how did Qloo shape this list (influence with and without each pick), how do two or three shows compare,
-// where do their fans live (heatmap), and what would a model guess without Qloo (neutral baseline).
+// where do their fans live (heatmap, cells named after nearby cities), and what would a model guess without Qloo
+// (neutral baseline, each name checkable against Qloo search). Show names open the receipt wherever they appear.
 // Optional parts fail as a labelled state and never block the table or the pitch.
 "use client";
 
@@ -13,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { adaptAngles, adaptAudience } from "@/lib/ui/adapt";
 import { filterShows, sortShows, topicCounts, type SortDir, type SortKey } from "@/lib/ui/desk";
 import { formatRetrieved } from "@/lib/ui/format";
+import { nearestCity, topAreas, US_CITIES } from "@/lib/ui/places";
 import type { Enrichment, UiAngle, UiAudience, UiShow } from "@/lib/ui/types";
 import { cn } from "@/lib/utils";
 
@@ -141,7 +143,15 @@ export function FanTable({ g, topics, setTopics, compare, setCompare, onOpen, on
 
 interface Without { name: string; state: string; kept?: number; left?: string[]; entered?: string[]; error?: string }
 
-export function InfluencePanel({ g }: { g: GreenRoom }) {
+/** A show name that opens its receipt when it is in the current list; plain text otherwise. */
+function ShowLink({ g, name, onOpen }: { g: GreenRoom; name: string; onOpen: (id: string) => void }) {
+  const show = g.shows.find((s) => s.name === name);
+  return show
+    ? <button type="button" onClick={() => onOpen(show.id)} className="font-semibold text-primary underline-offset-2 hover:underline">{name}</button>
+    : <span>{name}</span>;
+}
+
+export function InfluencePanel({ g, onOpen }: { g: GreenRoom; onOpen: (id: string) => void }) {
   const run = g.run!;
   const b = g.brief!;
   const names = [b.work, ...b.seeds.filter((s) => s !== b.work)];
@@ -164,10 +174,13 @@ export function InfluencePanel({ g }: { g: GreenRoom }) {
         {run.influence.length ? (
           <ul className="mt-3 space-y-2">
             {run.influence.map((r, i) => (
-              <li key={r.name} className="grid grid-cols-[minmax(0,10rem)_1fr_3rem] items-center gap-3 text-sm">
+              <li key={r.name} className="grid grid-cols-[minmax(0,10rem)_1fr_3rem_auto] items-center gap-3 text-sm">
                 <span className="truncate font-semibold">{r.name}</span>
-                <span className="h-2.5 overflow-hidden rounded-full bg-paper-deep"><span className="bar-grow block h-full rounded-full bg-primary" style={{ width: `${Math.round(Math.min(1, Math.max(0, r.score)) * 100)}%`, "--i": i } as React.CSSProperties} /></span>
+                <span className="h-2.5 overflow-hidden rounded-full bg-paper-deep"><span className="bar-grow block h-full rounded-full" style={{ width: `${Math.round(Math.min(1, Math.max(0, r.score)) * 100)}%`, background: vibeOf(r.name).fill, "--i": i } as React.CSSProperties} /></span>
                 <span className="text-right tabular-nums">{r.score.toFixed(2)}</span>
+                {r.name !== b.work && b.seeds.includes(r.name) && !b.tour
+                  ? <button type="button" onClick={() => g.dropSeed(r.name)} disabled={g.busy} className="rounded-full px-2 py-1 text-xs font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground">Re-run without</button>
+                  : <span />}
               </li>
             ))}
           </ul>
@@ -188,7 +201,10 @@ export function InfluencePanel({ g }: { g: GreenRoom }) {
               <li key={w.name}>
                 <p className="font-semibold">Without {w.name}: {w.state === "ok" ? `${w.kept} of the top ${st.data!.topCount} ${w.kept === 1 ? "stays" : "stay"}` : `unavailable (${w.error ?? w.state})`}</p>
                 {w.state === "ok" && (
-                  <p className="text-muted-foreground">{w.entered?.length ? `Joins: ${w.entered.slice(0, 3).join(", ")}${w.entered.length > 3 ? "…" : ""}. ` : ""}{w.left?.length ? `Drops: ${w.left.slice(0, 3).join(", ")}${w.left.length > 3 ? "…" : ""}.` : "Nothing drops."}</p>
+                  <p className="text-muted-foreground">
+                    {w.entered?.length ? <>Joins: {w.entered.slice(0, 3).join(", ")}{w.entered.length > 3 ? "…" : ""}. </> : null}
+                    {w.left?.length ? <>Drops: {w.left.slice(0, 3).map((n, k) => <span key={n}>{k > 0 && ", "}<ShowLink g={g} name={n} onOpen={onOpen} /></span>)}{w.left.length > 3 ? "…" : ""}.</> : "Nothing drops."}
+                  </p>
                 )}
               </li>
             ))}
@@ -273,15 +289,17 @@ function AudienceMini({ a }: { a: UiAudience }) {
 interface Cell { lat: number; lon: number; affinity: number }
 const BOUNDS = { west: -125, east: -66, south: 24, north: 50 }; // contiguous United States
 
-export function HeatmapPanel({ g }: { g: GreenRoom }) {
+export function HeatmapPanel({ g, onOpen }: { g: GreenRoom; onOpen: (id: string) => void }) {
   const [showId, setShowId] = useState(g.shows[0]?.id ?? "");
+  const [area, setArea] = useState<string | null>(null);
+  const [hover, setHover] = useState<{ x: number; y: number; text: string } | null>(null);
   const [st, setSt] = useState<{ loading: boolean; cells?: Cell[]; retrievedAt?: string; queryId?: string; error?: string; for?: string }>({ loading: false });
   const load = async () => {
     setSt({ loading: true });
     try {
       const j = await (await fetch(`/api/heatmap?show=${encodeURIComponent(showId)}`)).json();
       const h = j.heatmap;
-      if (h?.status === "ok" && Array.isArray(h.data)) setSt({ loading: false, cells: h.data, retrievedAt: h.retrievedAt, queryId: h.queryId, for: showId });
+      if (h?.status === "ok" && Array.isArray(h.data)) { setArea(null); setSt({ loading: false, cells: h.data, retrievedAt: h.retrievedAt, queryId: h.queryId, for: showId }); }
       else setSt({ loading: false, error: j.retryAfterSeconds ? `rate limited, retry in ${j.retryAfterSeconds}s` : (h?.error ?? h?.status ?? "unavailable") });
     } catch {
       setSt({ loading: false, error: "request_failed" });
@@ -294,6 +312,8 @@ export function HeatmapPanel({ g }: { g: GreenRoom }) {
   const sorted = [...cells].sort((a, b) => a.affinity - b.affinity);
   const cut = sorted.length ? sorted[Math.floor(sorted.length * 0.9)].affinity : 1;
   const name = g.shows.find((s) => s.id === (st.for ?? showId))?.name;
+  const areas = topAreas(sorted.filter((c) => c.affinity >= cut));
+  const near = (c: Cell) => area !== null && nearestCity(c)?.name === area;
   return (
     <div className="rounded-[10px] border border-line bg-card p-5">
       <div className="flex flex-wrap items-end gap-3">
@@ -307,16 +327,45 @@ export function HeatmapPanel({ g }: { g: GreenRoom }) {
       </div>
       {st.cells && (
         <figure className="mt-4">
-          <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Taste heatmap for ${name}: ${cells.length} Qloo cells in the contiguous United States; the top tenth by affinity is highlighted.`} className="w-full rounded-[8px] bg-paper">
-            {sorted.map((c, i) => {
-              const top = c.affinity >= cut;
-              return <circle key={i} cx={x(c.lon)} cy={y(c.lat)} r={top ? 3.4 : 2.2} fill={top ? "var(--coral)" : "var(--forest)"} opacity={top ? 0.95 : 0.12 + 0.5 * Math.max(0, Math.min(1, c.affinity))} />;
-            })}
-          </svg>
+          <div className="relative" onMouseLeave={() => setHover(null)}>
+            <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Taste heatmap for ${name}: ${cells.length} Qloo cells in the contiguous United States; the top tenth by affinity is highlighted.`} className="w-full rounded-[8px] bg-paper">
+              {sorted.map((c, i) => {
+                const top = c.affinity >= cut;
+                const hit = near(c);
+                const city = nearestCity(c)?.name;
+                return (
+                  <circle key={i} cx={x(c.lon)} cy={y(c.lat)} r={hit ? 4.6 : top ? 3.4 : 2.2}
+                    fill={hit ? "var(--primary)" : top ? "var(--coral)" : "var(--forest)"}
+                    opacity={area && !hit ? 0.15 : top || hit ? 0.95 : 0.12 + 0.5 * Math.max(0, Math.min(1, c.affinity))}
+                    onMouseEnter={() => setHover({ x: (x(c.lon) / W) * 100, y: (y(c.lat) / H) * 100, text: `${city ? `Near ${city}` : "Unnamed area"} · Qloo affinity ${c.affinity.toFixed(2)}${top ? " · top tenth" : ""}` })}
+                    onClick={() => city && setArea(area === city ? null : city)} className="cursor-pointer" />
+                );
+              })}
+            </svg>
+            {hover && (
+              <span role="tooltip" className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[130%] whitespace-nowrap rounded-[6px] bg-forest px-2 py-1 text-xs font-semibold text-on-dark shadow-lg" style={{ left: `${hover.x}%`, top: `${hover.y}%` }}>
+                {hover.text}
+              </span>
+            )}
+          </div>
           <figcaption className="mt-2 text-xs text-muted-foreground">
-            Each dot is a Qloo geohash cell for {name}; coral marks the top tenth by Qloo affinity. Taste concentration, not listener counts. Query {st.queryId} · {st.retrievedAt && formatRetrieved(st.retrievedAt)}.
+            Each dot is a Qloo geohash cell for {name}; coral marks the top tenth by Qloo affinity. Taste concentration, not listener counts. Hover a dot for its area, click it to highlight that area. Query {st.queryId} · {st.retrievedAt && formatRetrieved(st.retrievedAt)}.
           </figcaption>
         </figure>
+      )}
+      {st.cells && areas.length > 0 && (
+        <div className="mt-4 rounded-[8px] bg-paper p-4">
+          <p className="text-sm font-semibold">Where the top tenth clusters <span className="font-normal text-muted-foreground">· candidate book-tour stops</span></p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {areas.map((a) => (
+              <button key={a.city.name} type="button" aria-pressed={area === a.city.name} onClick={() => setArea(area === a.city.name ? null : a.city.name)}
+                className={cn("min-h-9 rounded-full px-3 text-sm font-semibold transition-colors", area === a.city.name ? "bg-primary text-primary-foreground" : "bg-card ring-1 ring-line hover:ring-primary")}>
+                {a.city.name} <span className="font-normal opacity-75">· {a.cells} {a.cells === 1 ? "cell" : "cells"}</span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">Qloo returns cells without place names; Green Room names each one after the nearest of {US_CITIES.length} large US cities within 120 km (built-in, approximate coordinates). <button type="button" className="font-semibold text-primary hover:underline" onClick={() => onOpen(st.for ?? showId)}>Open {name}</button></p>
+        </div>
       )}
       {st.error && <p role="status" className="mt-3 text-sm font-semibold text-alert">Heatmap unavailable: {st.error}.</p>}
       <p className="mt-3 text-xs text-muted-foreground">Trend lines are not shown: Qloo&apos;s Trending endpoint returned no podcast data when checked live on 30 Oct 2026.</p>
@@ -326,8 +375,25 @@ export function HeatmapPanel({ g }: { g: GreenRoom }) {
 
 // ---------- 5. Model-only baseline
 
-export function BaselinePanel({ g }: { g: GreenRoom }) {
+type Lookup = { loading: boolean; match?: string; status?: string };
+// Qloo search is fuzzy (a made-up name still returns a show), so only the same name counts as found.
+const normName = (s: string) => s.toLowerCase().replace(/^the\s+/, "").replace(/[^a-z0-9]+/g, " ").trim();
+const sameName = (a: string, b: string) => normName(a) === normName(b);
+
+export function BaselinePanel({ g, onOpen }: { g: GreenRoom; onOpen: (id: string) => void }) {
   const [st, setSt] = useState<{ loading: boolean; names?: string[]; model?: string; error?: string }>({ loading: false });
+  const [looked, setLooked] = useState<Record<string, Lookup>>({});
+  // Checks one model-only name against Qloo /search (podcasts): Qloo's own data complements the model's guess.
+  const check = async (n: string) => {
+    setLooked((l) => ({ ...l, [n]: { loading: true } }));
+    try {
+      const j = await (await fetch(`/api/lookup?q=${encodeURIComponent(n)}`)).json();
+      const r = j.lookup;
+      setLooked((l) => ({ ...l, [n]: { loading: false, status: r?.status ?? (j.retryAfterSeconds ? "rate_limited" : "unavailable"), match: r?.status === "ok" ? r.data?.[0]?.name : undefined } }));
+    } catch {
+      setLooked((l) => ({ ...l, [n]: { loading: false, status: "unavailable" } }));
+    }
+  };
   const b = g.brief!;
   const ask = async () => {
     setSt({ loading: true });
@@ -340,23 +406,36 @@ export function BaselinePanel({ g }: { g: GreenRoom }) {
     }
   };
   const qloo = g.shows.slice(0, 8);
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  const both = st.names ? st.names.filter((n) => qloo.some((s) => norm(s.name) === norm(n))).length : 0;
+  const both = st.names ? st.names.filter((n) => qloo.some((s) => sameName(s.name, n))).length : 0;
   return (
     <div className="rounded-[10px] border border-line bg-card p-5">
       <p className="text-sm text-muted-foreground">The same brief, answered by a language model alone. Shown side by side so you can judge what Qloo adds; neither list is labelled better.</p>
       <div className="mt-4 grid grid-cols-2 gap-6">
         <div>
           <h3 className="font-semibold">With Qloo audience data</h3>
-          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">{qloo.map((s) => <li key={s.id}>{s.name} <span className="tabular-nums text-muted-foreground">· {s.overlap !== undefined ? s.overlap.toFixed(2) : "n/a"}</span></li>)}</ol>
-          <p className="mt-2 text-xs text-muted-foreground">Each name has a Qloo entity, a query id and a retrieval time.</p>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">{qloo.map((s) => <li key={s.id}><button type="button" onClick={() => onOpen(s.id)} className="text-left font-medium hover:text-primary hover:underline">{s.name}</button> <span className="tabular-nums text-muted-foreground">· {s.overlap !== undefined ? s.overlap.toFixed(2) : "n/a"}</span></li>)}</ol>
+          <p className="mt-2 text-xs text-muted-foreground">Each name has a Qloo entity, a query id and a retrieval time. Click one for its receipt and pitch.</p>
         </div>
         <div>
           <h3 className="font-semibold">Model only, no Qloo</h3>
           {st.names ? (
             <>
-              <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">{st.names.map((n) => <li key={n}>{n}</li>)}</ol>
-              <p className="mt-2 text-xs text-muted-foreground">{st.model}. Names not verified, no entity ids, no scores. {both} of {st.names.length} also {both === 1 ? "appears" : "appear"} in the Qloo top 8.</p>
+              <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-sm">
+                {st.names.map((n) => {
+                  const l = looked[n];
+                  return (
+                    <li key={n}>
+                      {n}{" "}
+                      {!l ? <button type="button" onClick={() => check(n)} className="rounded-full px-2 py-0.5 text-xs font-semibold text-primary ring-1 ring-primary/40 hover:bg-primary hover:text-primary-foreground">Check in Qloo</button>
+                        : l.loading ? <span className="text-xs text-muted-foreground">checking…</span>
+                        : l.match && sameName(l.match, n) ? <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">✓ In Qloo</span>
+                        : l.match ? <span className="text-xs text-muted-foreground">Not found by that name · Qloo&apos;s closest: {l.match}</span>
+                        : <span className="text-xs text-muted-foreground">{l.status === "empty" ? "Qloo has no podcast by that name" : `Qloo check unavailable (${l.status})`}</span>}
+                    </li>
+                  );
+                })}
+              </ol>
+              <p className="mt-2 text-xs text-muted-foreground">{st.model}. Names not verified, no entity ids, no scores. {both} of {st.names.length} also {both === 1 ? "appears" : "appear"} in the Qloo top 8. &ldquo;Check in Qloo&rdquo; asks Qloo search (podcasts) for the name; only the same name counts as found, otherwise Qloo&apos;s closest show is named.</p>
             </>
           ) : (
             <Button className="mt-2" variant="outline" onClick={ask} disabled={st.loading}>{st.loading ? "Asking the model…" : "Ask a model without Qloo"}</Button>
