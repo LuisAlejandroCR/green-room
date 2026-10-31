@@ -36,6 +36,15 @@ Warm paper, a deep forest-green structure, Fraunces for headlines and Hanken Gro
 
 It runs: search (one type, and the multi-type list the app sends), podcast insights, a popularity-filter probe, compare, demographics, a malformed request (must be a 4xx) and an empty search. Output is structural only: endpoint, parameter names, HTTP status, field paths with JS types, result counts, numeric rate-limit headers, and a pass/fail verdict per expected path. It never prints the key or any response value and writes nothing to disk. Do not commit recordings or live responses.
 
+## What complements Qloo
+
+Everything on the desk is Qloo data except these, each labelled where it appears:
+
+- **Place names on the heatmap.** Qloo's heatmap returns geohash cells (lat, lon, affinity) without names. Green Room names a cell after the nearest of 61 large US cities within 120 km (`lib/ui/places.ts`, built-in approximate coordinates) and lists where the top tenth clusters as candidate book-tour stops. Qloo's numbers are unchanged.
+- **Random brief.** "Find live matches" with an empty field types a random well-known title (`lib/ui/random.ts`); Qloo then resolves and ranks it like any brief.
+- **Claude (via OpenRouter, else Anthropic).** A second opinion on ambiguous names, pitch drafts from the Qloo evidence, and the model-only baseline. Each model-only name can be checked against Qloo search (`/api/lookup`, one request); only the same name counts as found, because Qloo search is fuzzy.
+- **JEV** reviews pitch drafts against the Qloo evidence.
+
 ## Rate limiting
 
 `/api/run` and `/api/show` are limited per client IP (6 and 20 requests per minute) plus a global cap per route (40 and 120 per minute). Over the limit the server answers a typed `429 {state: "rate_limited", retryAfterSeconds}` with `Retry-After`, and makes no Qloo request. The limiter is in memory (no Redis): it is best-effort per server instance, bounded to 5000 tracked IPs, and fails closed when full. The client IP comes from `x-real-ip`, else the last `x-forwarded-for` entry; unknown clients share one bucket.
