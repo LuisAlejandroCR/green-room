@@ -27,12 +27,13 @@ test("absent, corrupt or non-ok recordings are absent, never repaired", () => {
   assert.equal(readTour(encodeTour({ ...run, state: "degraded", results: [] })), null);
 });
 
-test("without ANTHROPIC_API_KEY every agent call is typed unavailable and makes no request", async () => {
+test("without OP_API_KEY or ANTHROPIC_API_KEY every agent call is typed unavailable and makes no request", async () => {
   delete process.env.ANTHROPIC_API_KEY;
+  delete process.env.OP_API_KEY;
   assert.equal(agentConfigured(), false);
   const opts = [{ id: "a", name: "A" }, { id: "b", name: "B" }];
   for (const r of [await suggestCandidate({ name: "x", context: [], options: opts }), await draftPitchWithClaude({ work: "w", show: "s", showTopics: [], sharedThemes: [], workTaste: [] }), await baselineGuess("w", [])]) {
-    assert.deepEqual(r, { status: "unavailable", reason: "missing ANTHROPIC_API_KEY" });
+    assert.deepEqual(r, { status: "unavailable", reason: "missing OP_API_KEY and ANTHROPIC_API_KEY" });
   }
 });
 
