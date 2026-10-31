@@ -54,3 +54,25 @@ test("native pick hint uses the same words as the web", async () => {
   for (const c of [{}, { A: "x" }, { A: "x", B: "y" }]) assert.equal(m.pickHint(groups, c), pickHint(groups, c));
   assert.equal(m.pickHint([{ name: "Dune" }], {}), pickHint([{ name: "Dune" }], {}));
 });
+
+test("shared pitches drop the [Your name] placeholder and credit Qloo for the match", () => {
+  const show = { id: "1", name: "Radiolab", mode: "live" as const, provenance: { affinity: 0.93 } };
+  const body = m.draftPitch("Atomic Habits", "Radiolab", [], ["Science"]);
+  assert.ok(body.endsWith("[Your name]"));
+  assert.ok(!m.stripSignature(body).includes("[Your name]"));
+  const claude = m.shareText({ text: body, author: "claude" }, show);
+  assert.ok(!claude.includes("[Your name]"));
+  assert.match(claude, /Match: Qloo audience taste data \(fit 93\/100\)\./);
+  assert.match(claude, /Pitch: drafted by Claude from that Qloo data, as a second opinion\./);
+  const template = m.shareText({ text: body, author: "template" }, { ...show, provenance: {} });
+  assert.match(template, /Match: Qloo audience taste data\.\n/);
+  assert.match(template, /Pitch: Green Room template/);
+  assert.ok(!template.includes("Claude"));
+});
+
+test("the /api/pitch answer is read as Claude only when the server says so", () => {
+  assert.deepEqual(m.parsePitch({ text: " Hi ", author: { kind: "claude", model: "x" } }), { text: "Hi", author: "claude" });
+  assert.deepEqual(m.parsePitch({ text: "Hi", author: { kind: "template" } }), { text: "Hi", author: "template" });
+  assert.equal(m.parsePitch({ text: "" }), null);
+  assert.equal(m.parsePitch(null), null);
+});

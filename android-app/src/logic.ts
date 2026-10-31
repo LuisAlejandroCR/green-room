@@ -31,7 +31,15 @@ export interface Run {
   results: Show[];
   candidates: { name: string; options: Candidate[] }[];
   unresolved: string[];
+  taste?: { id: string; name: string }[]; // Qloo taste analysis of the work; optional
   error?: string;
+}
+
+/** Who wrote a pitch: Claude from the Qloo evidence (via the server), or the deterministic template. */
+export type PitchAuthor = "claude" | "template";
+export interface Pitch {
+  text: string;
+  author: PitchAuthor;
 }
 
 export interface Brief {
@@ -118,6 +126,29 @@ export function parseDetail(json: unknown): ShowDetail {
       .map(([k]) => k.replace(/_to_/g, "–").replace(/_and_/g, " & ").replace(/_/g, " "))
     : [];
   return { angles, ages };
+}
+
+/** Drops a trailing "[Your name]" placeholder (and the blank lines before it); shared text should not carry it. */
+export function stripSignature(text: string): string {
+  return text.replace(/\s*\[Your name\]\s*$/i, "").trimEnd();
+}
+
+/** The /api/pitch answer as a Pitch, or null when it is not usable. */
+export function parsePitch(json: unknown): Pitch | null {
+  const j = (json ?? {}) as { text?: unknown; author?: { kind?: unknown } };
+  if (typeof j.text !== "string" || !j.text.trim()) return null;
+  return { text: j.text.trim(), author: j.author?.kind === "claude" ? "claude" : "template" };
+}
+
+/** What Share sends: the pitch without the placeholder signature, then one honest credits line per source. */
+export function shareText(pitch: Pitch, show: Show): string {
+  const fit = fitOf(show);
+  const credits = [
+    `Match: Qloo audience taste data${fit !== undefined ? ` (fit ${fit}/100)` : ""}.`,
+    pitch.author === "claude" ? "Pitch: drafted by Claude from that Qloo data, as a second opinion." : "Pitch: Green Room template from that Qloo data.",
+    "Found with Green Room.",
+  ];
+  return `${stripSignature(pitch.text)}\n\n—\n${credits.join("\n")}`;
 }
 
 /** Same deterministic draft as lib/pitch.ts: only the work, the show name and tags Qloo returned. */
