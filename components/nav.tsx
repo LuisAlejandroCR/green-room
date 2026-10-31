@@ -25,6 +25,7 @@ export function Sidebar({ view, onChange }: { view: View; onChange: (v: View) =>
           <Icon className="size-4" aria-hidden="true" /> {label}
         </button>
       ))}
+      <p className="mt-auto px-3 pt-8 font-display text-sm italic leading-snug text-on-dark-muted">“Evidence, not guesswork.”<br />Built for real relationships.</p>
     </nav>
   );
 }
