@@ -70,7 +70,7 @@ export function PitchStudio({ g, show }: { g: GreenRoom; show: UiShow }) {
         </p>
       </div>
       {st?.status === "error" && <p role="alert" className="text-sm font-semibold text-alert">The draft request failed. The template below is unchanged.</p>}
-      <PitchEditor value={text} onChange={(t) => g.setPitch(show.id, t)} to={show.name} re={g.brief?.work ?? g.work} seed={show.id} />
+      <PitchEditor value={text} onChange={(t) => g.setPitch(show.id, t)} to={show.name} re={g.workFor(show)} seed={show.id} />
       {st?.review && <ReviewPanel review={st.review} stale={st.stale} />}
       <div className="flex flex-wrap gap-3">
         <Button variant="outline" onClick={() => g.recheck(show)} disabled={st?.reviewing}>

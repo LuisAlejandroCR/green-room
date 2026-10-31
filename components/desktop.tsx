@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { Bookmark, Check, History, Search, Sparkles } from "lucide-react";
 import { Botanical, Collage, LeafMark } from "./art";
+import { CandidateBadgeTag } from "./candidate-badge";
 import { Cover, FitRing, vibeOf } from "./cover";
 import { BaselinePanel, Comparator, FanTable, HeatmapPanel, InfluencePanel, Section } from "./desk";
 import { RunNotice } from "./run-states";
@@ -14,6 +15,7 @@ import { PitchStudio } from "./studio";
 import type { GreenRoom } from "./use-green-room";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { candidateBadge, pickHint } from "@/lib/ui/candidates";
 import { searchWithTopics, topicsFromSearch } from "@/lib/ui/desk";
 import { toCsv, toHtmlReport } from "@/lib/ui/export";
 import { formatRetrieved } from "@/lib/ui/format";
@@ -169,12 +171,15 @@ function BriefCard({ g }: { g: GreenRoom }) {
           </label>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" size="lg" disabled={g.busy || !g.work.trim()}><Search aria-hidden="true" />Find live matches</Button>
+          <Button type="submit" size="lg" disabled={g.busy || !g.work.trim()} aria-describedby="brief-hint"><Search aria-hidden="true" />Find live matches</Button>
           <button type="button" onClick={g.demo} disabled={g.busy} className="relative inline-flex h-14 items-center gap-2 overflow-hidden rounded-[3px] bg-gradient-to-r from-[#b8432c] via-[#8a4a00] to-[#6b3a7a] px-6 font-semibold text-white disabled:opacity-50">
             <span aria-hidden="true" className="shine absolute inset-0" />
             <Sparkles className="relative size-4" aria-hidden="true" /><span className="relative">Try the demo · live data</span>
           </button>
         </div>
+        <p id="brief-hint" role="status" className="text-sm text-muted-foreground">
+          {!g.work.trim() && !g.busy ? "Type your guest's work to search live, or try the demo." : null}
+        </p>
       </div>
     </form>
   );
@@ -216,20 +221,20 @@ function Confirm({ g }: { g: GreenRoom }) {
   return (
     <section className="rise mt-6 max-w-5xl rounded-[12px] border border-line bg-card p-7">
       <h2 className="font-display text-3xl">Which one did you mean?</h2>
-      <p className="mt-1 text-muted-foreground">Qloo found several matches. Pick each one; Green Room never chooses an ID for you, and re-checks your pick with Qloo.</p>
+      <p className="mt-1 text-muted-foreground">Qloo found several matches. Pick one per name; Green Room never chooses an ID for you, and re-checks your pick with Qloo. &ldquo;Qloo&apos;s top match&rdquo; is Qloo&apos;s first search result; &ldquo;Claude suggests&rdquo; is a second opinion.</p>
       {run.candidates.map((group) => (
         <fieldset key={group.name} className="mt-6">
           <legend className="text-lg font-semibold">&ldquo;{group.name}&rdquo;</legend>
           <div className="mt-3 grid grid-cols-5 gap-3">
             {group.options.map((o, i) => {
               const on = g.choices[group.name] === o.id;
-              const hint = g.suggestions[group.name] === o.id;
+              const badge = candidateBadge(i, o.id, g.suggestions[group.name]);
               return (
                 <button key={o.id} type="button" role="radio" aria-checked={on} onClick={() => g.choose(group.name, o)}
                   className={cn("pop relative rounded-[8px] bg-paper p-2 text-left", on ? "ring-4 ring-primary" : "ring-1 ring-line hover:ring-input")} style={{ "--i": i } as React.CSSProperties}>
                   <Cover src={o.image} seed={o.id} alt="" className="aspect-[3/4] w-full" rounded="rounded-[6px]" />
                   {on && <span className="pop absolute right-3 top-3 grid size-7 place-items-center rounded-full bg-primary text-primary-foreground"><Check className="size-4" aria-hidden="true" /></span>}
-                  {hint && <span className="absolute left-3 top-3 rounded-full bg-[#6b3a7a] px-2 py-0.5 text-xs font-semibold text-white">Claude suggests</span>}
+                  <CandidateBadgeTag badge={badge} />
                   <span className="mt-2 line-clamp-3 text-sm font-semibold leading-snug">{o.name}</span>
                   {(o.kind || o.detail) && <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{[o.kind, o.detail].filter(Boolean).join(" · ")}</span>}
                   {o.tags?.length ? <span className="mt-1 line-clamp-2 text-xs text-muted-foreground">{o.tags.join(", ")}</span> : null}
@@ -239,9 +244,10 @@ function Confirm({ g }: { g: GreenRoom }) {
           </div>
         </fieldset>
       ))}
-      <div className="mt-6 flex gap-3">
-        <Button size="lg" disabled={!g.ready} onClick={g.confirm}>Confirm and build list</Button>
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <Button size="lg" disabled={!g.ready} onClick={g.confirm} aria-describedby="pick-hint">Confirm and build list</Button>
         <Button size="lg" variant="outline" onClick={g.cancel}>Cancel</Button>
+        <p id="pick-hint" role="status" className="text-sm text-muted-foreground">{pickHint(run.candidates, g.choices)}</p>
       </div>
     </section>
   );
@@ -293,22 +299,36 @@ function ShowSheet({ g, show }: { g: GreenRoom; show: UiShow }) {
           </div>
         </div>
       </SheetHeader>
+      {/* What matters for the decision first; the technical receipt stays one click away. */}
       <div className="mt-6 grid grid-cols-[auto_1fr] items-center gap-4">
-        <span style={{ color: vibeOf(show.id).fill }}><FitRing value={show.overlap} size={72} stroke={vibeOf(show.id).fill} /></span>
-        <p className="text-sm text-muted-foreground">{AFFINITY_NOTE}</p>
+        <span style={{ color: vibeOf(show.id).fill }}><FitRing value={show.overlap} size={64} stroke={vibeOf(show.id).fill} /></span>
+        <div className="min-w-0">
+          {show.description && <p className="leading-relaxed">{show.description}</p>}
+          <p className="mt-1 text-xs text-muted-foreground">{AFFINITY_NOTE}</p>
+        </div>
       </div>
-      <dl className="mt-6 grid grid-cols-[9rem_minmax(0,1fr)] gap-x-4 gap-y-3 border-y border-line py-4 text-sm">
-        <dt className="text-muted-foreground">{e.angles?.state === "ok" ? "Shared themes" : "Qloo topics"}</dt>
-        <dd>{e.angles?.state === "ok" ? e.angles.data.map((a) => a.tag).join(", ") : show.topics?.join(", ") || "None returned"}{e.loading && <span className="text-muted-foreground"> · checking shared themes…</span>}</dd>
-        <dt className="text-muted-foreground">Who listens</dt>
-        <dd>{e.loading ? "Loading…" : e.audience?.state === "ok" ? `${e.audience.data.gender.find((x) => x.share > 0)?.label ?? "no gender lean"}; ages ${e.audience.data.age.filter((x) => x.share > 0).slice(0, 3).map((x) => x.label).join(", ") || "none"}` : e.audience?.state === "unavailable" ? `Unavailable (${e.audience.reason})` : "Qloo returned none"}</dd>
-        {show.popularity !== undefined && (<><dt className="text-muted-foreground">Qloo popularity index</dt><dd>{show.popularity.toFixed(2)} <span className="text-xs text-muted-foreground">{POPULARITY_NOTE}</span></dd></>)}
-        <dt className="text-muted-foreground">Source</dt><dd>{show.provenance.source}</dd>
-        <dt className="text-muted-foreground">Query · entity</dt><dd className="font-mono text-xs">{show.provenance.queryId} · {show.provenance.entityId}</dd>
-        <dt className="text-muted-foreground">Retrieved</dt><dd>{formatRetrieved(show.provenance.retrievedAt)}</dd>
-        <dt className="text-muted-foreground">Data</dt><dd><ModeBadge mode={show.mode} short /></dd>
-        {show.description && (<><dt className="text-muted-foreground">About</dt><dd className="leading-relaxed">{show.description}</dd></>)}
-      </dl>
+      <div className="mt-5 space-y-3 border-t border-line pt-4 text-sm">
+        <div>
+          <p className="font-semibold">{e.angles?.state === "ok" ? "Shared themes" : "Qloo topics"}{e.loading && <span className="font-normal text-muted-foreground"> · checking shared themes…</span>}</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {(e.angles?.state === "ok" ? e.angles.data.map((a) => a.tag) : show.topics ?? []).map((t) => <span key={t} className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold">{t}</span>)}
+            {e.angles?.state !== "ok" && !show.topics?.length && <span className="text-muted-foreground">None returned</span>}
+          </div>
+        </div>
+        {(e.loading || e.audience?.state === "ok") && (
+          <p><span className="font-semibold">Who listens: </span>{e.loading ? "Loading…" : e.audience?.state === "ok" ? `${e.audience.data.gender.find((x) => x.share > 0)?.label ?? "no gender lean"}; ages ${e.audience.data.age.filter((x) => x.share > 0).slice(0, 3).map((x) => x.label).join(", ") || "none"}` : null}</p>
+        )}
+      </div>
+      <details className="group mt-4 rounded-[8px] border border-line bg-paper px-4 py-2 text-sm">
+        <summary className="flex min-h-11 cursor-pointer items-center justify-between font-semibold">Qloo receipt <ModeBadge mode={show.mode} short /></summary>
+        <dl className="grid grid-cols-[9rem_minmax(0,1fr)] gap-x-4 gap-y-2 pb-2 pt-1">
+          {show.popularity !== undefined && (<><dt className="text-muted-foreground">Popularity index</dt><dd>{show.popularity.toFixed(2)} <span className="text-xs text-muted-foreground">{POPULARITY_NOTE}</span></dd></>)}
+          {!e.loading && e.audience?.state !== "ok" && (<><dt className="text-muted-foreground">Who listens</dt><dd>{e.audience?.state === "unavailable" ? `Unavailable (${e.audience.reason})` : "Qloo returned none"}</dd></>)}
+          <dt className="text-muted-foreground">Source</dt><dd>{show.provenance.source}</dd>
+          <dt className="text-muted-foreground">Query · entity</dt><dd className="break-all font-mono text-xs">{show.provenance.queryId} · {show.provenance.entityId}</dd>
+          <dt className="text-muted-foreground">Retrieved</dt><dd>{formatRetrieved(show.provenance.retrievedAt)}</dd>
+        </dl>
+      </details>
       <h3 className="mt-8 font-display text-2xl">Pitch Studio</h3>
       <p className="mb-4 text-sm text-muted-foreground">Drafted only from the Qloo evidence above, checked by JEV, edited and sent by you.</p>
       <PitchStudio g={g} show={show} />

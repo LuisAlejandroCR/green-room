@@ -7,8 +7,10 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, Copy, Heart, History, Info, Search, Share2, Sparkles, X } from "lucide-react";
 import { LeafMark } from "./art";
+import { CandidateBadgeTag } from "./candidate-badge";
 import { Cover, FitRing, vibeOf } from "./cover";
 import type { GreenRoom, TagSignal } from "./use-green-room";
+import { candidateBadge, pickHint } from "@/lib/ui/candidates";
 import type { UiRun, UiShow } from "@/lib/ui/types";
 import { cn } from "@/lib/utils";
 
@@ -206,14 +208,14 @@ function PickScreen({ g }: { g: GreenRoom }) {
           <div role="radiogroup" aria-label={`Matches for ${group.name}`} className="no-scrollbar -mx-4 mt-3 flex snap-x gap-3 overflow-x-auto px-4 pb-2">
             {group.options.map((o, oi) => {
               const on = g.choices[group.name] === o.id;
-              const hint = g.suggestions[group.name] === o.id;
+              const badge = candidateBadge(oi, o.id, g.suggestions[group.name]);
               return (
                 <button key={o.id} type="button" role="radio" aria-checked={on} onClick={() => g.choose(group.name, o)}
                   className={cn("pop relative w-36 shrink-0 snap-start rounded-2xl bg-card p-2 text-left transition-all", on ? "ring-4 ring-primary" : "ring-1 ring-line")}
                   style={{ "--i": oi } as React.CSSProperties}>
                   <Cover src={o.image} seed={o.id} alt="" className="aspect-[3/4] w-full" rounded="rounded-xl" />
                   {on && <span className="pop absolute right-3 top-3 grid size-8 place-items-center rounded-full bg-primary text-primary-foreground"><Check className="size-5" aria-hidden="true" /></span>}
-                  {hint && <span className="absolute left-3 top-3 rounded-full bg-[#6b3a7a] px-2 py-0.5 text-xs font-semibold text-white">Likely</span>}
+                  <CandidateBadgeTag badge={badge} className="text-[11px]" />
                   <span className="mt-2 line-clamp-3 text-sm font-semibold leading-snug">{o.name}</span>
                   {(o.kind || o.detail) && <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{[o.kind, o.detail].filter(Boolean).join(" · ")}</span>}
                 </button>
@@ -223,6 +225,7 @@ function PickScreen({ g }: { g: GreenRoom }) {
         </section>
       ))}
       <div className="fixed inset-x-0 bottom-0 z-20 space-y-2 bg-paper/95 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 backdrop-blur">
+        {!g.ready && <p role="status" className="text-center text-sm text-muted-foreground">{pickHint(run.candidates, g.choices)}</p>}
         <button type="button" disabled={!g.ready} onClick={g.confirm} className="flex h-14 w-full items-center justify-center rounded-2xl bg-primary text-lg font-semibold text-primary-foreground active:scale-[0.98] disabled:opacity-50">Show my podcasts</button>
         <button type="button" onClick={g.cancel} className="h-11 w-full text-base font-semibold text-muted-foreground">Cancel</button>
       </div>

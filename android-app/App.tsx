@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { API_BASE, runBrief, showDetail } from "./src/api";
 import {
-  DEMO_BRIEF, draftPitch, fitOf, GOAL, hasDeck, parseSeeds, plainLine, stateMessage,
+  DEMO_BRIEF, draftPitch, fitOf, GOAL, hasDeck, parseSeeds, pickHint, plainLine, stateMessage,
   type Brief, type Run, type Show, type ShowDetail,
 } from "./src/logic";
 
@@ -181,11 +181,12 @@ function PickScreen({ run, brief, onGo, onBack }: { run: Run; brief: Brief; onGo
       {run.candidates.map((g) => (
         <View key={g.name} style={{ marginTop: 16 }}>
           <Text style={s.label}>{g.name}</Text>
-          {g.options.map((o) => {
+          {g.options.map((o, i) => {
             const on = choices[g.name] === o.id;
             return (
               <Pressable key={o.id} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => setChoices((c) => ({ ...c, [g.name]: o.id }))}
                 style={[s.option, on && { borderColor: C.primary, backgroundColor: "#eaf2ec" }]}>
+                {i === 0 && <Text style={s.badge}>Qloo&apos;s top match</Text>}
                 <Text style={s.optionName}>{o.name}</Text>
                 {(o.kind || o.detail) && <Text style={s.small}>{[o.kind, o.detail].filter(Boolean).join(" · ")}</Text>}
               </Pressable>
@@ -194,6 +195,7 @@ function PickScreen({ run, brief, onGo, onBack }: { run: Run; brief: Brief; onGo
         </View>
       ))}
       <View style={{ marginTop: 20 }}>
+        {!ready && <Text style={[s.small, { textAlign: "center", marginBottom: 8 }]} accessibilityLiveRegion="polite">{pickHint(run.candidates, choices)}</Text>}
         <Button label="Find podcasts" disabled={!ready} onPress={() => onGo({ ...brief, confirmed: { ...brief.confirmed, ...choices } })} />
       </View>
     </ScrollView>
@@ -342,6 +344,7 @@ const s = StyleSheet.create({
   demoSub: { fontSize: 14, color: "#ffffffe6", marginTop: 2 },
   option: { minHeight: 56, borderWidth: 2, borderColor: C.line, borderRadius: 14, backgroundColor: C.card, padding: 12, marginBottom: 8, justifyContent: "center" },
   optionName: { fontSize: 17, fontWeight: "700", color: C.ink },
+  badge: { alignSelf: "flex-start", fontSize: 12, fontWeight: "700", color: "#fff", backgroundColor: C.primary, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, marginBottom: 6, overflow: "hidden" },
   card: { flex: 1, maxHeight: 520, borderRadius: 24, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, overflow: "hidden", elevation: 4 },
   cover: { width: "100%", flex: 1, minHeight: 180, backgroundColor: "#e9e2d4" },
   coverEmpty: { alignItems: "center", justifyContent: "center" },
