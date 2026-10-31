@@ -4,7 +4,7 @@
     "slug": "green-room",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/green-room-icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
@@ -14,14 +14,14 @@
       "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#FAF6EF",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/green-room-foreground.png",
+        "backgroundImage": "./assets/green-room-background.png",
+        "monochromeImage": "./assets/green-room-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/green-room-favicon.png"
     }
   }
 }
