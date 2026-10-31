@@ -1,0 +1,47 @@
+# ci.yml: web checks (typecheck, tests, build in sample mode, no keys) and Android checks (typecheck, expo-doctor,
+# Metro bundle against the deployed API). The APK itself is built by EAS from the developer's account, not here.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    env:
+      QLOO_MODE: sample
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: android-app/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx --yes expo-doctor
+      - name: Bundle Android JS with the preview API base
+        run: |
+          export EXPO_PUBLIC_API_BASE="$(node -p "require('./eas.json').build.preview.env.EXPO_PUBLIC_API_BASE")"
+          npx expo export -p android --output-dir "$RUNNER_TEMP/android-export"
