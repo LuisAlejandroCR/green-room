@@ -50,7 +50,7 @@ npm test
 npm run build
 ```
 
-Sample mode: include the word "ambiguous" in a name to see the confirmation step.
+Demo mode: select **Try demo** in the campaign brief. It makes no Qloo request and always displays `SAMPLE · Not Qloo data`; include the word "ambiguous" in a name to see the confirmation step.\n\nConfigured sample mode remains available for local development via `QLOO_MODE=sample`.
 
 Live mode: set `QLOO_MODE=live` and `QLOO_API_KEY` (server-only, never `NEXT_PUBLIC_`). `GET /api/health` reports `{sha, mode, key_present}`.
 
