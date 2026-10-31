@@ -1,17 +1,18 @@
 // App.tsx: Green Room for Android, native screens mirroring the web phone flow (components/mobile.tsx).
 // Start (example or your work) -> optional fans-also-love -> confirm ambiguous titles -> card deck (swipe right keeps,
-// left skips, every gesture has a button, "i" shows Qloo facts) -> "Your 3 picks" with Copy pitch and Share.
+// left skips, every gesture has a button, "i" shows Qloo facts) -> "Your 3 picks" as cover thumbnails; each opens a
+// pitch sheet (Claude draft from Qloo data, editable, Copy text and Share with a credits line).
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator, Animated, Image, Modal, PanResponder, Platform, Pressable, ScrollView, Share,
   StatusBar as RNStatusBar, StyleSheet, Text, TextInput, Vibration, View,
 } from "react-native";
-import { API_BASE, runBrief, showDetail } from "./src/api";
+import { API_BASE, requestPitch, runBrief, showDetail } from "./src/api";
 import {
-  DEMO_BRIEF, draftPitch, fitOf, GOAL, hasDeck, parseSeeds, pickHint, plainLine, stateMessage,
-  type Brief, type Run, type Show, type ShowDetail,
+  DEMO_BRIEF, draftPitch, fitOf, GOAL, hasDeck, parseSeeds, pickHint, plainLine, shareText, stateMessage, stripSignature,
+  type Brief, type Pitch, type Run, type Show, type ShowDetail,
 } from "./src/logic";
 
 const C = { paper: "#faf6ef", card: "#ffffff", ink: "#1f2a24", muted: "#5b6660", line: "#ddd6c8", primary: "#2f6b4f", coral: "#b8432c" };
@@ -73,7 +74,7 @@ export default function App() {
   else if (run?.state === "needs_confirmation" && brief) screen = <PickScreen run={run} brief={brief} onGo={go} onBack={restart} />;
   else if (run && hasDeck(run) && brief) {
     screen = showPicks || deck.length === 0
-      ? <PicksScreen work={brief.work} kept={kept} details={details} canSwipe={deck.length > 0} onMore={() => setShowPicks(false)} onRestart={restart} />
+      ? <PicksScreen run={run} work={brief.work} kept={kept} details={details} canSwipe={deck.length > 0} onMore={() => setShowPicks(false)} onRestart={restart} />
       : <DeckScreen run={run} deck={deck} kept={kept.length} details={details} onDetail={loadDetail} onDecide={decide} onPicks={() => setShowPicks(true)} onRestart={restart} />;
   } else if (run) screen = <Notice title="No matches yet" body={stateMessage(run)} action="Start over" onAction={restart} />;
   else if (step === "seeds") {
@@ -284,37 +285,106 @@ function Fact({ label, value }: { label: string; value: string }) {
 
 // ---------- Picks
 
-function PicksScreen({ work, kept, details, canSwipe, onMore, onRestart }: {
-  work: string; kept: Show[]; details: Record<string, ShowDetail>; canSwipe: boolean; onMore: () => void; onRestart: () => void;
+function PicksScreen({ run, work, kept, details, canSwipe, onMore, onRestart }: {
+  run: Run; work: string; kept: Show[]; details: Record<string, ShowDetail>; canSwipe: boolean; onMore: () => void; onRestart: () => void;
 }) {
-  const [copied, setCopied] = useState<string | null>(null);
-  const pitch = (show: Show) => draftPitch(work, show.name, details[show.id]?.angles ?? [], show.topics);
-  const copy = async (show: Show) => {
-    await Clipboard.setStringAsync(pitch(show));
-    buzz(); setCopied(show.id); setTimeout(() => setCopied(null), 1800);
-  };
-  const share = (show: Show) => { Share.share({ message: pitch(show), title: `Pitch for ${show.name}` }).catch(() => undefined); };
+  const [open, setOpen] = useState<Show | null>(null);
+  // Pitches are drafted once per show and kept while the screen lives, edits included.
+  const [pitches, setPitches] = useState<Record<string, Pitch>>({});
   return (
     <ScrollView style={s.scroll} contentContainerStyle={s.page}>
       <Header onBack={onRestart} />
       <Text style={s.h1}>Your {kept.length === 1 ? "pick" : `${kept.length} picks`}</Text>
-      <Text style={s.lead}>{kept.length ? "Copy a ready pitch or share it. We never send anything." : "Swipe right on a show to keep it."}</Text>
-      {kept.map((show) => (
-        <View key={show.id} style={s.pick}>
-          <Text style={s.optionName}>{show.name}</Text>
-          {fitOf(show) !== undefined && <Text style={s.small}>Fit {fitOf(show)} out of 100</Text>}
-          <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-            <View style={{ flex: 1 }}><Button label={copied === show.id ? "Copied" : "Copy pitch"} onPress={() => copy(show)} /></View>
-            <View style={{ flex: 1 }}><Button label="Share" kind="ghost" onPress={() => share(show)} /></View>
-          </View>
-        </View>
-      ))}
-      <Text style={[s.small, { marginTop: 16 }]}>Read each pitch over and make it yours before you send it.</Text>
-      <View style={{ marginTop: 16, gap: 8 }}>
+      <Text style={s.lead}>{kept.length ? `Podcasts whose listeners share the taste of fans of ${work}. Open one to draft its pitch.` : "Swipe right on a show to keep it."}</Text>
+      <View style={{ marginTop: 16, gap: 12 }}>
+        {kept.map((show) => {
+          const fit = fitOf(show);
+          return (
+            <Pressable key={show.id} accessibilityRole="button" accessibilityLabel={`Pitch ${show.name}`} onPress={() => setOpen(show)}
+              style={({ pressed }) => [s.pickRow, pressed && { opacity: 0.85 }]}>
+              {show.image ? <Image source={{ uri: show.image }} style={s.thumb} accessibilityIgnoresInvertColors /> : <View style={[s.thumb, s.coverEmpty]}><Text style={s.thumbLetter}>{show.name.slice(0, 1)}</Text></View>}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.optionName} numberOfLines={2}>{show.name}</Text>
+                {!!show.topics?.length && <Text style={s.small} numberOfLines={1}>{show.topics.slice(0, 2).join(" · ")}</Text>}
+                <View style={s.pickMeta}>
+                  {fit !== undefined && <Text style={s.fitChip}>Fit {fit}</Text>}
+                  <Text style={s.pickCta}>{pitches[show.id] ? "Pitch ready ›" : "Pitch ›"}</Text>
+                </View>
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+      <View style={{ marginTop: 16 }}><ModeLine mode={run.mode} /></View>
+      <View style={{ marginTop: 8, gap: 8 }}>
         {canSwipe && <Button label="Keep swiping" kind="ghost" onPress={onMore} />}
         <Button label="Start over" kind="ghost" onPress={onRestart} />
       </View>
+      {open && (
+        <PitchSheet run={run} work={work} show={open} detail={details[open.id]} pitch={pitches[open.id]}
+          onPitch={(p) => setPitches((x) => ({ ...x, [open.id]: p }))} onClose={() => setOpen(null)} />
+      )}
     </ScrollView>
+  );
+}
+
+// One show's pitch: Claude drafts it on the server from the Qloo facts (template if Claude is unavailable, and
+// labelled so); the person edits it, then copies or shares it. Nothing is ever sent by the app.
+function PitchSheet({ run, work, show, detail, pitch, onPitch, onClose }: {
+  run: Run; work: string; show: Show; detail?: ShowDetail; pitch?: Pitch; onPitch: (p: Pitch) => void; onClose: () => void;
+}) {
+  const [busy, setBusy] = useState(!pitch);
+  const [copied, setCopied] = useState(false);
+  const themes = detail?.angles ?? [];
+  useEffect(() => {
+    if (pitch) return;
+    let live = true;
+    requestPitch({ work, show: show.name, showTopics: show.topics ?? [], sharedThemes: themes, workTaste: (run.taste ?? []).map((t) => t.name), sourceMode: run.mode })
+      .catch(() => ({ text: draftPitch(work, show.name, themes, show.topics), author: "template" as const }))
+      .then((p) => { if (live) { onPitch(p); setBusy(false); } });
+    return () => { live = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const copy = async () => {
+    if (!pitch) return;
+    await Clipboard.setStringAsync(stripSignature(pitch.text));
+    buzz(); setCopied(true); setTimeout(() => setCopied(false), 1800);
+  };
+  const share = () => { if (pitch) Share.share({ message: shareText(pitch, show), title: `Pitch for ${show.name}` }).catch(() => undefined); };
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={s.scrim} onPress={onClose} accessibilityLabel="Close pitch" />
+      <View style={[s.sheet, { maxHeight: "88%" }]}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          {show.image ? <Image source={{ uri: show.image }} style={s.thumbSmall} /> : null}
+          <View style={{ flex: 1 }}>
+            <Text style={s.optionName} numberOfLines={1}>{show.name}</Text>
+            <Text style={s.small}>Re: {work}</Text>
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} style={s.iconBtn}><Text style={s.iconText}>✕</Text></Pressable>
+        </View>
+        {busy || !pitch ? (
+          <View style={{ paddingVertical: 32, alignItems: "center" }}>
+            <ActivityIndicator color={C.primary} />
+            <Text style={[s.small, { marginTop: 8 }]}>Claude is drafting from the Qloo data…</Text>
+          </View>
+        ) : (
+          <>
+            <Text style={s.author}>{pitch.author === "claude" ? "Drafted by Claude from Qloo data · edit freely" : "Template from Qloo data (Claude unavailable) · edit freely"}</Text>
+            <ScrollView style={{ maxHeight: 280 }} keyboardShouldPersistTaps="handled">
+              <TextInput multiline value={stripSignature(pitch.text)} onChangeText={(t) => onPitch({ ...pitch, text: t })}
+                style={s.pitchInput} accessibilityLabel={`Pitch for ${show.name}`} textAlignVertical="top" />
+            </ScrollView>
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+              <View style={{ flex: 1 }}><Button label="Share" onPress={share} /></View>
+              <View style={{ flex: 1 }}><Button label={copied ? "Copied" : "Copy text"} kind="ghost" onPress={copy} /></View>
+            </View>
+            <Text style={[s.small, { marginTop: 10 }]}>Share adds a short credits line: match from Qloo, pitch by Claude. Read it over before you send it.</Text>
+          </>
+        )}
+      </View>
+    </Modal>
   );
 }
 
@@ -361,5 +431,13 @@ const s = StyleSheet.create({
   sheet: { backgroundColor: C.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32 },
   factLabel: { fontSize: 13, fontWeight: "700", color: C.muted, textTransform: "uppercase" },
   factValue: { fontSize: 17, color: C.ink, marginTop: 2 },
-  pick: { marginTop: 16, padding: 16, borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.line },
+  pickRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 12, borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, minHeight: 104 },
+  thumb: { width: 80, height: 80, borderRadius: 14, backgroundColor: "#e9e2d4" },
+  thumbSmall: { width: 48, height: 48, borderRadius: 10, backgroundColor: "#e9e2d4" },
+  thumbLetter: { fontSize: 32, fontWeight: "700", color: C.primary },
+  pickMeta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 },
+  fitChip: { fontSize: 13, fontWeight: "700", color: C.primary, backgroundColor: "#eaf2ec", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, overflow: "hidden" },
+  pickCta: { fontSize: 15, fontWeight: "700", color: C.coral },
+  author: { fontSize: 13, fontWeight: "600", color: C.primary, marginTop: 16, marginBottom: 8 },
+  pitchInput: { minHeight: 180, borderWidth: 2, borderColor: C.line, borderRadius: 14, backgroundColor: C.card, padding: 14, fontSize: 16, lineHeight: 23, color: C.ink },
 });
