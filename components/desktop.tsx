@@ -1,10 +1,10 @@
 // desktop.tsx: the web campaign desk (>=1024px). The publicist compares, filters, justifies and delivers: brief and
-// taste analysis, then one section per question (where are my fans, how Qloo shaped the list, compare, where they
+// taste analysis, your saved shortlist, then one section per question (where are my fans, how Qloo shaped the list, compare, where they
 // live, model-only baseline), a receipt + Pitch Studio sheet with JEV review, and CSV / HTML export with provenance.
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bookmark, Check, History, Search, Sparkles } from "lucide-react";
+import { Bookmark, Check, History, Search, Sparkles, X } from "lucide-react";
 import { Botanical, Collage, LeafMark } from "./art";
 import { CandidateBadgeTag } from "./candidate-badge";
 import { Cover, FitRing, vibeOf } from "./cover";
@@ -22,8 +22,6 @@ import { formatRetrieved } from "@/lib/ui/format";
 import type { UiShow } from "@/lib/ui/types";
 import { cn } from "@/lib/utils";
 
-type View = "desk" | "saved";
-
 function download(name: string, type: string, text: string) {
   const url = URL.createObjectURL(new Blob([text], { type }));
   const a = Object.assign(document.createElement("a"), { href: url, download: name });
@@ -36,7 +34,6 @@ function download(name: string, type: string, text: string) {
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "shortlist";
 
 export function DesktopApp({ g }: { g: GreenRoom }) {
-  const [view, setView] = useState<View>("desk");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [topics, setTopicsState] = useState<string[]>([]);
   const [compare, setCompare] = useState<string[]>([]);
@@ -70,17 +67,15 @@ export function DesktopApp({ g }: { g: GreenRoom }) {
 
   return (
     <div className="grid min-h-dvh grid-cols-[14rem_minmax(0,1fr)] bg-forest">
-      <Sidebar view={view} setView={setView} g={g} />
+      <Sidebar g={g} />
 
       <main className="min-w-0 bg-paper px-8 py-10 xl:px-12">
         <div className="mx-auto max-w-6xl">
-          {view === "saved" ? (
-            <SavedGrid g={g} onOpen={open} />
-          ) : (
-            <>
+          <>
               <p className="eyebrow">Campaign desk</p>
               <h1 className="rise headline mt-1 max-w-3xl text-5xl">Find the conversation your story deserves.</h1>
               <div className="mt-8">{g.run && brief && !g.busy && g.run.state !== "needs_confirmation" && g.run.state !== "cancelled" ? <Campaign g={g} /> : <BriefCard g={g} />}</div>
+              <Shortlist g={g} onOpen={open} />
               {g.run?.state === "needs_confirmation" && !g.busy && <Confirm g={g} />}
               <div className="mt-6 max-w-4xl">{g.run && !g.busy && <RunNotice run={g.run} />}</div>
               {g.busy && <LoadingRows />}
@@ -111,8 +106,7 @@ export function DesktopApp({ g }: { g: GreenRoom }) {
                   </Section>
                 </>
               )}
-            </>
-          )}
+          </>
         </div>
       </main>
 
@@ -125,11 +119,13 @@ export function DesktopApp({ g }: { g: GreenRoom }) {
   );
 }
 
-function Sidebar({ view, setView, g }: { view: View; setView: (v: View) => void; g: GreenRoom }) {
-  const item = (v: View, label: string, Icon: typeof Search, extra?: React.ReactNode) => (
+function Sidebar({ g }: { g: GreenRoom }) {
+  // One screen: the nav scrolls to a place on the desk instead of switching views.
+  const item = (target: string, label: string, Icon: typeof Search, current: boolean, extra?: React.ReactNode) => (
     <button
-      type="button" aria-current={view === v ? "page" : undefined} onClick={() => setView(v)}
-      className={cn("flex h-11 w-full items-center gap-3 rounded-[6px] px-3 text-left text-[0.9375rem] font-semibold transition-colors", view === v ? "bg-on-dark-line text-on-dark" : "text-on-dark-muted hover:bg-forest-2 hover:text-on-dark")}
+      type="button" aria-current={current ? "page" : undefined}
+      onClick={() => (target === "top" ? window.scrollTo({ top: 0, behavior: "smooth" }) : document.getElementById(target)?.scrollIntoView({ behavior: "smooth" }))}
+      className={cn("flex h-11 w-full items-center gap-3 rounded-[6px] px-3 text-left text-[0.9375rem] font-semibold transition-colors", current ? "bg-on-dark-line text-on-dark" : "text-on-dark-muted hover:bg-forest-2 hover:text-on-dark")}
     >
       <Icon className="size-4" aria-hidden="true" />{label}{extra}
     </button>
@@ -142,11 +138,11 @@ function Sidebar({ view, setView, g }: { view: View; setView: (v: View) => void;
       </div>
       <p className="mt-1 px-1 text-xs uppercase tracking-[0.18em] text-on-dark-muted">Podcast outreach for real ideas</p>
       <nav aria-label="Main" className="mt-10 space-y-1">
-        {item("desk", "Campaign desk", Search)}
-        {item("saved", "Saved", Bookmark, g.saved.length > 0 && <span className="ml-auto rounded-full bg-[#b8432c] px-2 text-xs text-white">{g.saved.length}</span>)}
+        {item("top", "Campaign desk", Search, true)}
+        {g.saved.length > 0 && item("shortlist", "Shortlist", Bookmark, false, <span className="ml-auto rounded-full bg-[#b8432c] px-2 text-xs text-white">{g.saved.length}</span>)}
       </nav>
       {g.health?.tour_present && (
-        <button type="button" onClick={() => { setView("desk"); void g.tour(); }} disabled={g.busy} className="relative z-10 mt-6 flex items-center gap-2 rounded-[6px] border border-on-dark-line px-3 py-2 text-left text-sm font-semibold text-on-dark hover:bg-forest-2">
+        <button type="button" onClick={() => void g.tour()} disabled={g.busy} className="relative z-10 mt-6 flex items-center gap-2 rounded-[6px] border border-on-dark-line px-3 py-2 text-left text-sm font-semibold text-on-dark hover:bg-forest-2">
           <History className="size-4 shrink-0" aria-hidden="true" /><span>Take the tour<span className="block text-xs font-normal text-on-dark-muted">Recorded real run, no live request</span></span>
         </button>
       )}
@@ -263,26 +259,32 @@ function LoadingRows() {
   );
 }
 
-function SavedGrid({ g, onOpen }: { g: GreenRoom; onOpen: (id: string) => void }) {
+// Saved matches live on the desk itself, as a compact shortlist: no separate, mostly empty screen.
+function Shortlist({ g, onOpen }: { g: GreenRoom; onOpen: (id: string) => void }) {
+  if (!g.saved.length) return null;
   return (
-    <>
-      <h1 className="headline text-5xl">Saved</h1>
-      <p className="mt-3 text-lg text-muted-foreground">Matches you kept, stored in this browser only.</p>
-      {g.saved.length === 0 ? (
-        <p className="mt-10 text-lg">Nothing saved yet. Use the bookmark on any row.</p>
-      ) : (
-        <ul className="mt-8 grid grid-cols-4 gap-5">
-          {g.saved.map((s, i) => (
-            <li key={s.id} className="pop" style={{ "--i": i } as React.CSSProperties}>
-              <button type="button" onClick={() => onOpen(s.id)} className="block w-full rounded-[12px] p-3 text-left text-white" style={{ background: vibeOf(s.id).fill }}>
-                <Cover src={s.image} seed={s.id} alt="" className="aspect-square w-full" rounded="rounded-[8px]" />
-                <span className="mt-2 line-clamp-2 font-display text-lg leading-snug">{s.name}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </>
+    <section id="shortlist" aria-labelledby="shortlist-title" className="rise mt-6 max-w-5xl scroll-mt-6 rounded-[12px] border border-line bg-card p-5">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 id="shortlist-title" className="font-display text-2xl">Your shortlist <span className="text-base text-muted-foreground">· {g.saved.length}</span></h2>
+        <p className="text-xs text-muted-foreground">Stored in this browser only. Open one for its receipt and pitch.</p>
+      </div>
+      <ul className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-3">
+        {g.saved.map((s) => (
+          <li key={s.id} className="flex items-center gap-3 rounded-[8px] bg-paper p-2 ring-1 ring-line">
+            <button type="button" onClick={() => onOpen(s.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+              <Cover src={s.image} seed={s.id} alt="" className="size-12 shrink-0" rounded="rounded-[6px]" />
+              <span className="min-w-0">
+                <span className="block truncate font-semibold">{s.name}</span>
+                {s.savedFor && <span className="block truncate text-xs text-muted-foreground">for {s.savedFor}</span>}
+              </span>
+            </button>
+            <button type="button" onClick={() => g.toggleSave(s)} aria-label={`Remove ${s.name} from the shortlist`} className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground">
+              <X className="size-4" aria-hidden="true" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
