@@ -19,6 +19,7 @@ export function Sidebar({ view, onChange }: { view: View; onChange: (v: View) =>
       <p className="mb-6 flex items-center gap-2 px-2 font-display text-lg font-semibold">
         <LeafMark className="size-6 text-primary" /> Green Room
       </p>
+      <p className="mt-auto px-3 pt-8 font-display text-sm italic leading-snug text-on-dark-muted">“Evidence, not guesswork.”<br />Built for real relationships.</p>
       {ITEMS.map(({ view: v, label, Icon }) => (
         <button key={v} type="button" onClick={() => onChange(v)} aria-current={view === v ? "page" : undefined}
           className={cn("flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold", view === v ? "bg-on-dark-line" : "text-on-dark-muted hover:bg-on-dark-line/60")}>
