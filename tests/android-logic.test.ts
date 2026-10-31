@@ -47,3 +47,10 @@ test("show facts keep ok envelopes and drop failed ones", () => {
   assert.deepEqual(d, { angles: ["a", "b", "c"], ages: ["25–29", "35 & younger"] });
   assert.deepEqual(m.parseDetail({ angles: { status: "failed", data: null } }), { angles: [], ages: [] });
 });
+
+test("native pick hint uses the same words as the web", async () => {
+  const { pickHint } = await import("../lib/ui/candidates.ts");
+  const groups = [{ name: "A" }, { name: "B" }];
+  for (const c of [{}, { A: "x" }, { A: "x", B: "y" }]) assert.equal(m.pickHint(groups, c), pickHint(groups, c));
+  assert.equal(m.pickHint([{ name: "Dune" }], {}), pickHint([{ name: "Dune" }], {}));
+});

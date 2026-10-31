@@ -83,6 +83,14 @@ export function plainLine(show: Show): string | undefined {
   return show.channel ? `From ${show.channel}` : undefined;
 }
 
+/** Why "Find podcasts" is still disabled on the pick screen (same wording as lib/ui/candidates.ts), or null when ready. */
+export function pickHint(groups: { name: string }[], choices: Record<string, string | undefined>): string | null {
+  const missing = groups.filter((g) => !choices[g.name]).map((g) => g.name);
+  if (!missing.length) return null;
+  const left = missing.map((n) => `“${n}”`).join(", ");
+  return groups.length === 1 ? `Pick one match for ${left} to continue.` : `Pick one match per name to continue: ${groups.length - missing.length} of ${groups.length} chosen, still to pick: ${left}.`;
+}
+
 /** Only states with shows to swipe open the deck. */
 export function hasDeck(run: Run | null): boolean {
   return !!run && (run.state === "ok" || run.state === "partial") && run.results.length > 0;

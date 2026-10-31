@@ -82,3 +82,12 @@ test("health reports which providers are configured, as booleans only", () => {
   env({ OP_API_KEY: "test-op", OP_BASE_URL: "https://openrouter.example/api/v1" });
   assert.deepEqual(agentProviders(), { openrouter: true, anthropic: false });
 });
+
+test("the candidate suggestion leaves room for the answer and reads the first number", async () => {
+  const { suggestCandidate } = await import("../lib/agent.ts");
+  env({ OP_API_KEY: "test-op", OP_BASE_URL: "https://openrouter.example/api/v1" });
+  handler = () => openRouterOk("Candidate 2 is the original book.");
+  const r = await suggestCandidate({ name: "Atomic Habits", context: [], options: [{ id: "a", name: "Journal" }, { id: "b", name: "Atomic Habits" }] });
+  assert.deepEqual(r, { status: "ok", data: "b", model: OPENROUTER_MODEL });
+  assert.ok(Number(calls[0].body.max_tokens) >= 128);
+});

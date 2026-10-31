@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DEMO_BRIEF } from "@/lib/demo";
 import { draftPitch } from "@/lib/pitch";
 import { adaptRun } from "@/lib/ui/adapt";
+import { workTitle } from "@/lib/ui/candidates";
 import type { UiCandidate, UiRun, UiShow } from "@/lib/ui/types";
 import { themesOf, useEnrichment } from "./use-enrichment";
 
@@ -193,20 +194,24 @@ export function useGreenRoom() {
   const reset = () => { setRun(null); setBrief(null); setSelectedId(null); };
 
   const isSaved = (id: string) => saved.some((s) => s.id === id);
-  const toggleSave = (show: UiShow) => persist(isSaved(show.id) ? saved.filter((s) => s.id !== show.id) : [show, ...saved].slice(0, 50));
-  const save = (show: UiShow) => { if (!isSaved(show.id)) persist([show, ...saved].slice(0, 50)); };
-
   const themes = themesOf(enrichment);
-  const workName = brief?.work || work || "my guest's work";
+  // The title the person picked on "Which one did you mean?" wins over what they typed.
+  const workName = (brief && workTitle(brief.work, picked[brief.work])) || work.trim() || "my guest's work";
+  /** The work a show's pitch is about: the current campaign for its own results, else the work it was saved for. */
+  const workFor = (show: UiShow) => (shows.some((s) => s.id === show.id) ? workName : show.savedFor ?? workName);
+
+  const keep = (show: UiShow): UiShow => ({ ...show, savedFor: workFor(show) });
+  const toggleSave = (show: UiShow) => persist(isSaved(show.id) ? saved.filter((s) => s.id !== show.id) : [keep(show), ...saved].slice(0, 50));
+  const save = (show: UiShow) => { if (!isSaved(show.id)) persist([keep(show), ...saved].slice(0, 50)); };
   const pitchFor = (show: UiShow) =>
-    pitches[show.id] ?? draftPitch(workName, show.name, show.id === selected?.id ? themes : [], show.topics);
+    pitches[show.id] ?? draftPitch(workFor(show), show.name, show.id === selected?.id ? themes : [], show.topics);
   const setPitch = (id: string, text: string) => {
     setPitches((p) => ({ ...p, [id]: text }));
     setStudio((s) => (s[id] ? { ...s, [id]: { ...s[id], stale: true } } : s));
   };
 
   const evidenceFor = (show: UiShow) => ({
-    work: workName, show: show.name, showTopics: show.topics ?? [],
+    work: workFor(show), show: show.name, showTopics: show.topics ?? [],
     sharedThemes: show.id === selected?.id ? themes : [], workTaste: (run?.taste ?? []).map((t) => t.name),
     sourceMode: show.mode,
   });
@@ -245,7 +250,7 @@ export function useGreenRoom() {
   return {
     work, setWork, seeds, setSeeds, tags, setTags, busy, run, brief, shows, selected, selectedId, setSelectedId, enrichment, themes,
     choices, choose, suggestions, ready, confirm, cancel, reset, submit, demo, tour, moreLike, health,
-    saved, isSaved, toggleSave, save, pitchFor, setPitch, studio, draft, recheck, workCover,
+    saved, isSaved, toggleSave, save, workFor, pitchFor, setPitch, studio, draft, recheck, workCover,
   };
 }
 

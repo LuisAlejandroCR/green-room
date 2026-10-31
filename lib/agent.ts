@@ -108,7 +108,9 @@ const SUGGEST_SYSTEM = [
 /** Call 1 of 2. Returns the suggested option id, or null when unclear. The UI labels it a suggestion. */
 export async function suggestCandidate(input: SuggestInput): Promise<AgentResult<string | null>> {
   const numbered = input.options.map((o, i) => ({ n: i + 1, name: o.name, kind: o.kind, detail: o.detail, tags: o.tags }));
-  const r = await ask(SUGGEST_SYSTEM, { typed: input.name, brief: input.context, candidates: numbered }, 16);
+  // 200, not a handful: on hard cases the model spends tokens before the digit, and a tiny cap returns no text at all
+  // (seen live on OpenRouter 2026-10-31: finish_reason "length", content null at 16; "1" with 50 tokens used at 200).
+  const r = await ask(SUGGEST_SYSTEM, { typed: input.name, brief: input.context, candidates: numbered }, 200);
   if (r.status !== "ok") return r;
   const n = Number(r.data.match(/\d+/)?.[0]);
   const pick = Number.isInteger(n) && n >= 1 && n <= input.options.length ? input.options[n - 1].id : null;

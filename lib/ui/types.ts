@@ -24,6 +24,7 @@ export interface UiShow {
   topics?: string[]; // the show's own Qloo tags
   topicIds?: string[]; // Qloo tag ids, same order as topics
   provenance: UiProvenance;
+  savedFor?: string; // Saved only: the work title the show was kept for, so its pitch names the right work later
 }
 
 export interface UiCandidate {
