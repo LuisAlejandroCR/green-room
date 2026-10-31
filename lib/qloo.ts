@@ -66,6 +66,7 @@ export interface ShowFacts {
   channel?: string;
   episodes?: string;
   topics?: string[];
+  topicIds?: string[]; // Qloo tag ids, same order as topics; used as a signal for "more like this"
 }
 
 export interface PodcastResult extends ShowFacts {
@@ -82,6 +83,7 @@ export interface Candidate {
   image?: string;
   kind?: string; // "Book", "Film", "Artist", "Brand" from Qloo's types
   detail?: string; // disambiguation or publication year, to tell editions apart
+  tags?: string[]; // the candidate's own Qloo tags (verified live 2026-10-30 on /search); they help tell matches apart
 }
 
 // Which typed pick shaped the top results most (`query.explainability`, verified live 2026-10-31).
@@ -139,6 +141,11 @@ const imageOf = (props: Record<string, unknown>): string | undefined => {
   const url = isRecord(props.image) ? str(props.image.url) : undefined;
   return url && /^https:\/\//.test(url) ? url : undefined;
 };
+const tagNames = (v: unknown): string[] =>
+  [...new Set((Array.isArray(v) ? v : []).flatMap((t) => {
+    const n = isRecord(t) ? text(t.name) : undefined;
+    return n && !NOISE_TOPICS.has(n.toLowerCase()) ? [n] : [];
+  }))];
 const KINDS: Record<string, string> = {
   "urn:entity:book": "Book", "urn:entity:movie": "Film", "urn:entity:artist": "Artist", "urn:entity:brand": "Brand",
   "urn:entity:podcast": "Podcast", "urn:entity:tv_show": "TV show",
@@ -171,7 +178,7 @@ type Fetched =
   | { kind: "body"; body: unknown }
   | { kind: "fail"; status: QlooStatus; error: string };
 
-async function fetchQloo(path: string, params: URLSearchParams, budget: Budget): Promise<Fetched> {
+async function fetchQloo(path: string, params: URLSearchParams, budget: Budget, timeoutMs = TIMEOUT_MS): Promise<Fetched> {
   const key = process.env.QLOO_API_KEY;
   if (!key) return { kind: "fail", status: "degraded", error: "missing_api_key" };
   let lastError = "qloo_unreachable";
@@ -180,7 +187,7 @@ async function fetchQloo(path: string, params: URLSearchParams, budget: Budget):
     try {
       const res = await fetch(`${BASE_URL}${path}?${params}`, {
         headers: { "X-Api-Key": key },
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (res.status === 429 || res.status >= 500) {
         lastError = `qloo_http_${res.status}`;
@@ -210,12 +217,13 @@ async function call<T>(
   budget: Budget,
   parse: (body: unknown) => T | null, // null = malformed
   sample: () => T,
+  timeoutMs?: number,
 ): Promise<QlooEnvelope<T>> {
   const mode = currentMode();
   const source = `GET ${path}`;
   const queryId = queryIdOf(path, params);
   if (mode === "sample") return envelope("ok", mode, source, queryId, sample());
-  const got = await fetchQloo(path, params, budget);
+  const got = await fetchQloo(path, params, budget, timeoutMs);
   if (got.kind === "fail") return envelope<T>(got.status, mode, source, queryId, null, got.error);
   const data = parse(got.body);
   if (data === null) return envelope<T>("malformed", mode, source, queryId, null, "unexpected_shape");
@@ -245,7 +253,8 @@ export function searchEntity(query: string, type: string, budget: Budget): Promi
         const year = num(props.publication_year);
         const detail = text(e.disambiguation) ?? (year !== undefined ? String(year) : undefined);
         const image = imageOf(props);
-        return [{ id, name, ...(image && { image }), ...(kind && { kind }), ...(detail && { detail }) }];
+        const tags = tagNames(e.tags).slice(0, 4);
+        return [{ id, name, ...(image && { image }), ...(kind && { kind }), ...(detail && { detail }), ...(tags.length && { tags }) }];
       });
       return list.length > 0 && out.length === 0 ? null : out;
     },
@@ -257,19 +266,26 @@ export function searchEntity(query: string, type: string, budget: Budget): Promi
 
 export interface RecommendPodcastsInput {
   seedEntityIds: string[];
+  tagIds?: string[]; // optional tag signal ("more like this", suggested chips)
+  resultIds?: string[]; // rank only these shows (shortlist comparison in one request)
   take?: number;
 }
 
 // Params allowed for podcasts: Qloo silently ignores the rest, so nothing else is sent.
 // No popularity filter: popularity is an index, not reach or availability.
-const PODCAST_PARAMS = ["filter.type", "signal.interests.entities", "feature.explainability", "take"] as const;
+// Verified live 2026-10-30: signal.interests.tags and filter.results.entities both work for podcasts.
+const PODCAST_PARAMS = ["filter.type", "signal.interests.entities", "signal.interests.tags", "filter.results.entities", "feature.explainability", "take"] as const;
+// Verified live: with a tag signal Qloo can take more than 8 s to answer.
+const SLOW_TIMEOUT_MS = 12_000;
 
 export function buildPodcastQuery(input: RecommendPodcastsInput): URLSearchParams {
   const q = new URLSearchParams();
   q.set("filter.type", "urn:entity:podcast");
   q.set("signal.interests.entities", input.seedEntityIds.join(","));
+  if (input.tagIds?.length) q.set("signal.interests.tags", input.tagIds.join(","));
+  if (input.resultIds?.length) q.set("filter.results.entities", input.resultIds.join(","));
   q.set("feature.explainability", "true");
-  q.set("take", String(Math.min(input.take ?? 20, MAX_TAKE)));
+  q.set("take", String(Math.min(input.resultIds?.length || input.take || 20, MAX_TAKE)));
   for (const key of [...q.keys()]) {
     if (!(PODCAST_PARAMS as readonly string[]).includes(key)) q.delete(key);
   }
@@ -299,16 +315,22 @@ function parsePodcasts(body: unknown): ParsedPodcast[] | null {
     // Description lives at one of four documented paths (harness source); only a plain string is kept.
     const description = text(e.short_description) ?? text(e.description) ?? text(props.short_description) ?? text(props.description);
     // The explainability payload shape is unverified; only a plain string is kept.
-    const topics = (Array.isArray(e.tags) ? e.tags : []).flatMap((t) => {
+    const seen = new Set<string>();
+    const tagRows = (Array.isArray(e.tags) ? e.tags : []).flatMap((t) => {
       const tag = isRecord(t) ? text(t.name) : undefined;
-      return tag && !NOISE_TOPICS.has(tag.toLowerCase()) ? [tag] : [];
-    });
+      if (!tag || NOISE_TOPICS.has(tag.toLowerCase()) || seen.has(tag)) return [];
+      seen.add(tag);
+      return [{ name: tag, id: isRecord(t) ? str(t.id) : undefined }];
+    }).slice(0, 6);
+    const topics = tagRows.map((t) => t.name);
+    const topicIds = tagRows.every((t) => t.id) ? tagRows.map((t) => t.id as string) : [];
     const channel = text(props.channel);
     const facts: ShowFacts = {
       ...(imageOf(props) && { image: imageOf(props) }),
       ...(channel && channel !== name && { channel }),
       ...(str(props.episode_count) && { episodes: str(props.episode_count) }),
-      ...(topics.length && { topics: [...new Set(topics)].slice(0, 6) }),
+      ...(topics.length && { topics }),
+      ...(topicIds.length && { topicIds }),
     };
     return [{ id, name, affinity: num(query.affinity) ?? num(e.affinity), popularity: num(e.popularity), explanation: str(query.explainability), description, ...facts }];
   });
@@ -356,6 +378,7 @@ export async function recommendPodcasts(
       return parsePodcasts(b);
     },
     () => SAMPLE_PODCASTS,
+    input.tagIds?.length ? SLOW_TIMEOUT_MS : undefined,
   );
   const source = env.mode === "sample" ? `${env.source} (synthetic fixture, no request made)` : env.source;
   const data = env.data
@@ -367,6 +390,7 @@ export async function recommendPodcasts(
         ...(p.channel && { channel: p.channel }),
         ...(p.episodes && { episodes: p.episodes }),
         ...(p.topics && { topics: p.topics }),
+        ...(p.topicIds && { topicIds: p.topicIds }),
         mode: env.mode,
         provenance: {
           entityId: p.id,
@@ -424,5 +448,122 @@ export function sharedAngles(workId: string, podcastId: string, budget: Budget):
       });
     },
     () => SAMPLE_ANGLES,
+  );
+}
+
+// ---- Campaign desk (iteration 6). Every path below was checked with `npm run smoke:qloo` on 2026-10-30.
+
+export interface VerifiedEntity {
+  id: string;
+  name: string;
+  kind?: string;
+}
+
+// Server-side re-verification of IDs the client sends back ("Search Entities by ID"): an ID Qloo does not return is
+// not used. One request for all IDs.
+export function entitiesById(ids: string[], budget: Budget): Promise<QlooEnvelope<VerifiedEntity[]>> {
+  const q = new URLSearchParams({ entity_ids: ids.join(",") });
+  return call(
+    "/entities",
+    q,
+    budget,
+    (b) => {
+      const list = listAt(b, "entities");
+      if (!list) return null;
+      return list.flatMap((e) => {
+        if (!isRecord(e)) return [];
+        const id = str(e.entity_id) ?? str(e.id);
+        const name = text(e.name);
+        const kind = (Array.isArray(e.types) ? e.types : []).map((t) => (typeof t === "string" ? KINDS[t] : undefined)).find(Boolean);
+        return id && name ? [{ id, name, ...(kind && { kind }) }] : [];
+      });
+    },
+    () => ids.map((id) => ({ id, name: id })),
+  );
+}
+
+export interface TasteTag {
+  id: string;
+  name: string;
+  score: number;
+}
+
+// Taste analysis of the work (`filter.type=urn:tag`): what its fans' taste is about. Optional enrichment.
+export function tasteOf(entityId: string, budget: Budget): Promise<QlooEnvelope<TasteTag[]>> {
+  const q = new URLSearchParams({ "filter.type": "urn:tag", "signal.interests.entities": entityId, take: "8" });
+  return call(
+    "/v2/insights",
+    q,
+    budget,
+    (b) => {
+      const tags = listAt(b, "tags");
+      if (!tags) return null;
+      const seen = new Set<string>(); // Qloo can return two tags with the same name (genre and keyword)
+      return tags.flatMap((t) => {
+        if (!isRecord(t)) return [];
+        const id = str(t.tag_id) ?? str(t.id);
+        const name = text(t.name);
+        const score = isRecord(t.query) ? num(t.query.affinity) : undefined;
+        if (!id || !name || score === undefined || NOISE_TOPICS.has(name.toLowerCase()) || seen.has(name)) return [];
+        seen.add(name);
+        return [{ id, name, score }];
+      });
+    },
+    () => [],
+  );
+}
+
+export interface TagHit {
+  id: string;
+  name: string;
+}
+
+// Tag search (`/v2/tags`, `filter.query`), for the suggested chips on the phone.
+export function searchTags(query: string, budget: Budget): Promise<QlooEnvelope<TagHit[]>> {
+  const q = new URLSearchParams({ "filter.query": query, take: "8" });
+  return call(
+    "/v2/tags",
+    q,
+    budget,
+    (b) => {
+      const tags = listAt(b, "tags");
+      if (!tags) return null;
+      return tags.flatMap((t) => {
+        const id = isRecord(t) ? str(t.id) ?? str(t.tag_id) : undefined;
+        const name = isRecord(t) ? text(t.name) : undefined;
+        return id && name ? [{ id, name }] : [];
+      });
+    },
+    () => [],
+  );
+}
+
+export interface HeatCell {
+  lat: number;
+  lon: number;
+  affinity: number;
+}
+
+// Heatmap (`filter.type=urn:heatmap`) for one show, in the United States (the only location probed live).
+// Verified live: about 2048 geohash cells with latitude, longitude and query.affinity. Web only.
+export function heatmapOf(podcastId: string, budget: Budget): Promise<QlooEnvelope<HeatCell[]>> {
+  const q = new URLSearchParams({ "filter.type": "urn:heatmap", "signal.interests.entities": podcastId, "filter.location.query": "United States" });
+  return call(
+    "/v2/insights",
+    q,
+    budget,
+    (b) => {
+      const cells = listAt(b, "heatmap");
+      if (!cells) return null;
+      return cells.flatMap((c) => {
+        const loc = isRecord(c) && isRecord(c.location) ? c.location : null;
+        const lat = loc ? num(loc.latitude) : undefined;
+        const lon = loc ? num(loc.longitude) : undefined;
+        const affinity = isRecord(c) && isRecord(c.query) ? num(c.query.affinity) : undefined;
+        return lat !== undefined && lon !== undefined && affinity !== undefined ? [{ lat, lon, affinity }] : [];
+      });
+    },
+    () => [],
+    SLOW_TIMEOUT_MS,
   );
 }

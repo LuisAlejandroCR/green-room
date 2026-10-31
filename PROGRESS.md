@@ -128,3 +128,40 @@ Acceptance:
 - Browser (live mode, dev server): phone 390x844 - Start, demo run, Matches with real covers, Why it fits with live audience bars, Your pitch, typed brief "Interstellar" + "Patagonia" through "Which one did you mean?" with real covers, save and Saved; no horizontal overflow; 0 controls under 44px. Desktop 1280x800 - demo run, campaign card, ranked rows, evidence panel with source, retrieval, LIVE badge, popularity note and influence, Pitch Studio sheet. No console errors from the app.
 - Removed: the synthetic `/api/demo` route (the demo is live now), `components/{brief-form,matches,receipt,campaign,sidebar,progress,nav,affinity}.tsx`, `components/ui/skeleton.tsx`.
 - Not verified: a real Android device or emulator for this iteration, screen reader and keyboard-only passes, deployed hosting. Shared themes from compare stayed empty for the briefs tried; the UI shows the show's own Qloo topics instead and labels them as such.
+
+## Iteration 6: web campaign desk, phone swipe deck, native Android app (2026-10-31)
+
+Spec: split the product into a web campaign desk (>=1024px) and a phone swipe flow, and ship Android as an Expo app built as an APK (the user's choice: native React Native screens, not a WebView or TWA). Acceptance: live Qloo data everywhere, 3 picks on the phone in under 60 s, no server key in the APK, typecheck/tests/build green.
+
+Done:
+- Web desk: sortable matches table with topic filter (kept in the URL, Esc clears), comparator for 2-3 shows in one Qloo request, influence (what changes without each pick), US heatmap of a show's fans, model-only baseline side by side, CSV and HTML report export with provenance.
+- Pitch Studio: Claude (`claude-sonnet-5-5`) drafts from the evidence only; JEV (`jev-1.14.0`) reviews it.
+- IDs confirmed in the browser are re-verified on the server with `/entities`; the work's taste analysis is shown; a labelled RECORDED tour exists (stored in `.env.local`, not committed).
+- Phone web: swipe deck with real covers, "More like this" (a show's topic as a tag signal), "Your 3 picks" with Copy pitch and Share.
+- Android (`android-app/`): native screens calling the deployed `/api/run` and `/api/show`; `eas.json` profile `preview` with `buildType: "apk"`; package `com.luisalejandrocr.greenroom`; API base `https://app-green-room.vercel.app` via `EXPO_PUBLIC_API_BASE`.
+- CI: `.github/workflows/ci.yml` (web typecheck, tests, build; Android typecheck, expo-doctor, Metro bundle).
+
+Validation (actual runs):
+- `npm run typecheck` pass; `npm test` 117 of 117 (7 new for the Android helpers: demo brief and pitch identical to the web, API base, seeds, fit, deck states, show facts); `npm run build` compiled.
+- Browser, live Qloo: phone 390x844 from tapping the example to 3 saved picks in 18.6 s, no horizontal overflow, no control under 48px; desktop 1280x800 desk features exercised.
+- Android: `npx tsc --noEmit` pass; `expo-doctor` 20/20; `expo export -p android` bundled (1.6 MB Hermes) with the deployed URL inlined and no `QLOO_API_KEY`, `JEV_API_KEY` or `ANTHROPIC` string in the bundle.
+- Deployed API probed with the demo brief: `/api/run` 200 `ok`/`live`, 20 podcasts with covers; `/api/show` 200 (audience returned, shared themes empty for that pair).
+
+Findings:
+- Trending returned no podcast data live, so there is no trending sparkline.
+- Demographics ages are relative lift (can be negative), not audience shares; the Android facts sheet says "Ages that lean in most".
+- A preview server that inherits `ANTHROPIC_API_KEY` from its parent shell overrides `.env.local` and Claude calls fail with `auth_failed`; start the server from a clean shell.
+
+Not verified: the APK build itself (needs the owner's `eas login`), the app on a real Android device, screen reader and keyboard-only passes, repository visibility.
+
+## Devpost text (draft, English)
+
+**Green Room** finds the podcasts whose listeners already love what you made, shows the Qloo evidence behind every match, and drafts a pitch you edit. It never sends anything.
+
+**What it does.** Type a book, film or brand (and optionally what its fans also love). Green Room resolves each name with Qloo search, asks you to pick when a title is ambiguous, and asks Qloo Insights for podcasts whose audiences share that taste. Every result carries its receipt: Qloo entity id, query id, retrieval time and affinity. On the web, a campaign desk lets you sort and filter matches, compare shows, see which of your picks shaped the list, map where a show's fans are, and set Qloo's answer beside a model-only guess. On a phone, and in the native Android app, you swipe through real matches and keep three, each with a ready pitch to copy or share.
+
+**How we built it.** Next.js on Vercel with server-only keys; Qloo `/search`, `/v2/insights`, `/v2/analysis/compare` and `/entities`; a request budget of 8 Qloo calls per run; Claude drafts pitches only from the Qloo evidence and JEV reviews each draft against it. The Android app is Expo / React Native, built as an APK with EAS, and talks only to our API.
+
+**Honesty rules.** No silent entity choice, no sample data shown as real, popularity never used as a reach claim, absent fields stay absent, and nothing is ever sent on your behalf.
+
+**Try it.** https://app-green-room.vercel.app - tap "See a real example". Android: install the APK from the EAS link in the submission.

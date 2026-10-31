@@ -48,9 +48,10 @@ function adaptShow(r: unknown): UiShow | null {
   const channel = str(r.channel);
   const episodes = str(r.episodes);
   const topics = Array.isArray(r.topics) ? r.topics.filter((t): t is string => typeof t === "string" && t.length > 0) : [];
+  const topicIds = Array.isArray(r.topicIds) && r.topicIds.length === topics.length && r.topicIds.every((t: unknown) => typeof t === "string") ? (r.topicIds as string[]) : [];
   return {
     id, name, ...(description !== undefined && { description }), mode, overlap: provenance.affinity, popularity: provenance.popularity,
-    ...(image && { image }), ...(channel && { channel }), ...(episodes && { episodes }), ...(topics.length && { topics }),
+    ...(image && { image }), ...(channel && { channel }), ...(episodes && { episodes }), ...(topics.length && { topics }), ...(topicIds.length && { topicIds }),
     provenance,
   };
 }
@@ -62,13 +63,14 @@ function adaptCandidate(o: unknown): UiCandidate[] {
   const image = httpsUrl(o.image);
   const kind = str(o.kind);
   const detail = str(o.detail);
-  return [{ id: o.id, name: o.name, ...(image && { image }), ...(kind && { kind }), ...(detail && { detail }) }];
+  const tags = Array.isArray(o.tags) ? o.tags.filter((t: unknown): t is string => typeof t === "string" && t.length > 0).slice(0, 4) : [];
+  return [{ id: o.id, name: o.name, ...(image && { image }), ...(kind && { kind }), ...(detail && { detail }), ...(tags.length && { tags }) }];
 }
 
 export function adaptRun(raw: unknown): UiRun {
   const empty: UiRun = {
     state: "malformed", mode: null, workId: null, shows: [], resolved: [], candidates: [],
-    unresolved: [], notFetched: [], ignoredSeeds: [], influence: [], budget: null,
+    unresolved: [], notFetched: [], ignoredSeeds: [], influence: [], seedIds: [], taste: [], budget: null,
   };
   if (!isRecord(raw)) return empty;
   if (raw.error && !raw.state) return { ...empty, state: "failed", note: str(raw.error) };
@@ -96,6 +98,11 @@ export function adaptRun(raw: unknown): UiRun {
     influence: (Array.isArray(raw.influence) ? raw.influence : []).flatMap((r) =>
       isRecord(r) && str(r.name) && num(r.score) !== undefined ? [{ name: r.name as string, score: r.score as number }] : [],
     ),
+    seedIds: strList(raw.seedIds),
+    taste: (Array.isArray(raw.taste) ? raw.taste : []).flatMap((t) =>
+      isRecord(t) && str(t.id) && str(t.name) && num(t.score) !== undefined ? [{ id: t.id as string, name: t.name as string, score: t.score as number }] : [],
+    ),
+    ...(str(raw.recordedAt) && { recordedAt: raw.recordedAt as string }),
     budget: isRecord(raw.budget) && num(raw.budget.used) !== undefined && num(raw.budget.max) !== undefined
       ? { used: raw.budget.used, max: raw.budget.max }
       : null,

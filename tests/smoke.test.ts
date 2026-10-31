@@ -18,12 +18,17 @@ function fakeQloo(opts: { ignorePopularity?: boolean; leakKeyInBody?: boolean } 
       if (url.searchParams.get("query")?.startsWith("zzqx")) return json({ results: [] });
       return json({ results: [{ entity_id: "w1", name: SECRET_NAME }] });
     }
+    if (p === "/entities") return json({ results: [{ entity_id: "w1", name: SECRET_NAME, types: ["urn:entity:book"] }] });
+    if (p === "/v2/tags") return json({ results: { tags: [{ id: "urn:tag:keyword:qloo:habits", name: SECRET_NAME }] } });
+    if (p === "/v2/trending") return json({ results: { trending: [] } });
+    if (url.searchParams.get("filter.type") === "urn:tag") return json({ results: { tags: [{ tag_id: "urn:tag:x", name: SECRET_NAME, query: { affinity: 0.7 } }] } });
+    if (url.searchParams.get("filter.type") === "urn:heatmap") return json({ results: { heatmap: [{ location: { latitude: 40.1, longitude: -74.2, geohash: "dr5" }, query: { affinity: 0.9 } }] } });
     if (p === "/v2/analysis/compare") return json({ results: { tags: [{ name: SECRET_NAME, query: { affinity: 0.4 } }] } });
     if (url.searchParams.get("filter.type") === "urn:demographics") return json({ results: { demographics: [{ query: { age: { "25_to_29": 0.4 }, gender: { female: 0.5 } } }] } });
     if (!url.searchParams.has("filter.type")) return json({ error: opts.leakKeyInBody ? `bad request for ${KEY}` : "missing filter.type" }, 400);
     const capped = url.searchParams.has("filter.popularity.max") && !opts.ignorePopularity;
     const entities = [
-      { entity_id: "p1", name: SECRET_NAME, popularity: capped ? 0.3 : 0.9, query: { affinity: 0.8 }, properties: { description: "secret description" } },
+      { entity_id: "p1", name: SECRET_NAME, popularity: capped ? 0.3 : 0.9, query: { affinity: 0.8 }, properties: { description: "secret description" }, tags: [{ id: "urn:tag:genre:secret", name: SECRET_NAME }] },
       { entity_id: "p2", name: "Other", popularity: 0.2 },
     ].slice(0, capped ? 1 : 2);
     return json({ results: { entities } });
@@ -53,7 +58,7 @@ test("report never contains the key or any response value, and covers all endpoi
   assert.equal(report.includes(KEY), false);
   assert.equal(report.includes(SECRET_NAME), false);
   assert.equal(report.includes("secret description"), false);
-  for (const name of ["search (one type)", "podcast insights", "popularity filter", "compare", "demographics", "malformed request", "empty search"]) {
+  for (const name of ["search (one type)", "podcast insights", "popularity filter", "compare", "demographics", "entities by id", "taste analysis", "shortlist ranked", "tag search", "heatmap", "trending", "malformed request", "empty search"]) {
     assert.ok(report.includes(name), name);
   }
   assert.match(report, /http: 200 {2}results: 2/);
