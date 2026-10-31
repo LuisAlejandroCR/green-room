@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Expo template agent notes (repo allows only the root Markdown files)
+AGENTS.md
